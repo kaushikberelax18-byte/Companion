@@ -1,0 +1,20 @@
+{
+  "name": "companion",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AI Companion with persistent conversations and personas",
+  "main": "api/index.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "node test_strip.js && node test_api.js",
+    "test:all": "node test_strip.js && node test_api.js && node test_models.js && node test_regression_fixes.js && node test_consistency.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@vercel/kv": "^3.0.0"
+  },
+  "devDependencies": {}
+}

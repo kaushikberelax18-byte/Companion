@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: companion
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: COMPANION_PORT
+        value: 10000
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ANTHROPIC_BASE_URL
+        sync: false
