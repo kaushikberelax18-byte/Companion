@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Companion</title>
+<link rel="stylesheet" href="/styles.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='%23e0567a'/></svg>">
+</head>
+<body>
+<div id="app">
+
+  <aside id="rail">
+    <div class="rail-head">
+      <span class="brand">Companion</span>
+      <button id="btn-settings" class="icon-btn" title="Settings" aria-label="Settings">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5A3.5 3.5 0 1 0 12 8.5a3.5 3.5 0 0 0 0 7Z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 8.9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 8.9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.18.62.72 1.06 1.38 1.09H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
+      </button>
+    </div>
+    <button id="btn-new" class="primary-block">New conversation</button>
+    <div class="rail-label">History</div>
+    <nav id="history" aria-label="Conversation history"></nav>
+    <div class="rail-foot">
+      <span id="conn-dot" class="dot"></span>
+      <span id="conn-text">connecting…</span>
+    </div>
+  </aside>
+
+  <main id="stage">
+    <header id="topbar">
+      <div class="who">
+        <span class="avatar" id="avatar">R</span>
+        <div class="who-meta">
+          <strong id="persona-name">Rae</strong>
+          <span id="persona-sub">25 · playful</span>
+          <span id="model-line" class="model-line"></span>
+        </div>
+      </div>
+      <div class="topbar-actions">
+        <button id="btn-opening" class="ghost">Restart scene</button>
+        <button id="btn-compress" class="ghost">Compact memory</button>
+      </div>
+    </header>
+
+    <section id="thread" aria-live="polite"></section>
+
+    <div id="error-bar" hidden><span class="k"></span><span class="msg"></span><button id="err-dismiss" title="Dismiss">✕</button></div>
+
+    <footer id="composer">
+      <div class="composer-row">
+        <textarea id="input" rows="1" placeholder="Say something…" autocomplete="off" spellcheck="true"></textarea>
+        <button id="btn-send" class="send" title="Send" aria-label="Send">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12l16-8-6 8 6 8-16-8Z"/></svg>
+        </button>
+      </div>
+      <div class="composer-hint"><span id="hint-meta"></span></div>
+    </footer>
+  </main>
+
+  <aside id="controls">
+    <div class="ctl-group">
+      <div class="ctl-title">Model</div>
+      <div class="model-select-row">
+        <select id="c-model" class="chip-select" aria-label="Active Model"></select>
+        <button id="btn-model-refresh" class="ghost icon-btn" title="Refresh model list" aria-label="Refresh models">
+          <svg viewBox="0 0 24 24"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.66-5.66"/></svg>
+        </button>
+      </div>
+      <div class="ctl-note" id="c-model-note"></div>
+    </div>
+
+    <div class="ctl-group">
+      <div class="ctl-title">Age</div>
+      <select id="c-age" class="chip-select" aria-label="Age"></select>
+      <div class="ctl-note" id="age-note"></div>
+    </div>
+
+    <div class="ctl-group">
+      <div class="ctl-title">Primary Personality</div>
+      <select id="c-personality" class="chip-select" aria-label="Primary Personality"></select>
+    </div>
+
+    <div class="ctl-group">
+      <div class="ctl-title">Secondary Trait (optional)</div>
+      <select id="c-secondaryTrait" class="chip-select" aria-label="Secondary Trait"></select>
+      <div class="ctl-note">Combine with your primary personality for a more nuanced character.</div>
+    </div>
+
+    <div class="ctl-group">
+      <div class="ctl-title">Conversation mode</div>
+      <div class="chips" id="c-mode" role="group" aria-label="Conversation mode"></div>
+    </div>
+
+    <div class="ctl-split">
+      <div class="ctl-group">
+        <div class="ctl-title">Response Length</div>
+        <select id="c-length" class="chip-select" aria-label="Response Length"></select>
+      </div>
+      <div class="ctl-group">
+        <div class="ctl-title">Initiative</div>
+        <select id="c-initiative" class="chip-select" aria-label="Initiative"></select>
+      </div>
+    </div>
+
+    <div class="ctl-split">
+      <div class="ctl-group">
+        <div class="ctl-title">Language Intensity</div>
+        <select id="c-style" class="chip-select" aria-label="Language Intensity"></select>
+      </div>
+      <div class="ctl-group">
+        <div class="ctl-title">Flirting Intensity</div>
+        <select id="c-flirting" class="chip-select" aria-label="Flirting Intensity"></select>
+      </div>
+    </div>
+
+    <div class="ctl-split">
+      <div class="ctl-group">
+        <div class="ctl-title">Character Consistency</div>
+        <select id="c-consistency" class="chip-select" aria-label="Character Consistency"></select>
+      </div>
+      <div class="ctl-group">
+        <div class="ctl-title">Roleplay Narration</div>
+        <select id="c-roleplay" class="chip-select" aria-label="Roleplay Narration"></select>
+      </div>
+    </div>
+
+    <div class="ctl-group">
+      <div class="ctl-title">Creativity</div>
+      <div class="chips" id="c-creativity" role="group" aria-label="Creativity"></div>
+    </div>
+
+    <div class="ctl-group" id="custom-personality-group" style="display:none;">
+      <div class="ctl-title">Custom Personality Text</div>
+      <textarea id="c-customPersonality" class="custom-textarea" rows="3" placeholder="Describe your custom personality here..."></textarea>
+      <div class="ctl-note">This will be used when "Custom" is selected as the primary personality.</div>
+    </div>
+  </aside>
+</div>
+
+<div id="settings-modal" class="modal" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-label="API settings">
+    <div class="modal-head">
+      <strong>API configuration</strong>
+      <button id="btn-close-settings" class="icon-btn" aria-label="Close">
+        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+
+    <label class="fld">
+      <span>Base URL</span>
+      <input id="s-baseUrl" type="text" spellcheck="false" placeholder="http://127.0.0.1:31415">
+    </label>
+
+    <label class="fld">
+      <span>Bind host</span>
+      <input id="s-bindHost" type="text" spellcheck="false" placeholder="127.0.0.1 (use 0.0.0.0 for LAN access)">
+    </label>
+
+    <label class="fld">
+      <span>Allow LAN access</span>
+      <input id="s-allowLAN" type="checkbox" checked> Allow access from other devices on your network
+    </label>
+
+    <label class="fld">
+      <span>API key</span>
+      <input id="s-apiKey" type="password" spellcheck="false" placeholder="leave blank to keep current / use environment">
+      <em class="fld-note" id="s-keynote"></em>
+    </label>
+
+    <label class="fld">
+      <span>Model</span>
+      <select id="s-model" class="chip-select" aria-label="Model"></select>
+      <label class="fld-toggle"><input type="checkbox" id="s-showall"> Show all catalog models (for troubleshooting)</label>
+      <em class="fld-note" id="s-modelnote"></em>
+      <em class="fld-note policy" id="s-policynote"></em>
+    </label>
+
+    <label class="fld">
+      <span>Context budget (input tokens)</span>
+      <input id="s-maxInputTokens" type="number" min="4000" max="200000" step="1000">
+    </label>
+
+    <label class="fld">
+      <span>Her name</span>
+      <input id="s-name" type="text" maxlength="24" placeholder="Rae">
+    </label>
+
+    <div class="modal-actions">
+      <button id="btn-test" class="ghost">Test connection</button>
+      <button id="btn-save-settings" class="primary">Save</button>
+    </div>
+    <pre id="s-result" class="result" hidden></pre>
+  </div>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>
