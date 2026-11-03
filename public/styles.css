@@ -563,6 +563,57 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round
 .result[data-ok="1"] { border-color: rgba(78, 201, 139, 0.35); color: #bff0d6; }
 .result[data-ok="0"] { border-color: rgba(240, 100, 100, 0.35); color: #ffc9c9; }
 
+/* ---------------- sidebars / toggle buttons ---------------- */
+
+/* Overlay that appears behind a slide-out sidebar on small screens.
+   Without it, taps on the chat stage fall straight through to the
+   controls panel that is sitting off-screen. */
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 39;
+  background: rgba(4, 4, 6, 0.55);
+  backdrop-filter: blur(2px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+/* Floating buttons that open the rail / controls sidebars on mobile.
+   They must be a minimum 44x44 CSS px so a thumb can actually hit them. */
+.toggle-btn {
+  position: fixed;
+  z-index: 41;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid var(--line-strong);
+  background: linear-gradient(180deg, var(--panel) 0%, #0b0b10 100%);
+  color: var(--text);
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.toggle-btn svg { width: 20px; height: 20px; }
+.toggle-btn:active { transform: scale(0.94); }
+
+/* Hidden on desktop — these toggles are only needed on narrow viewports
+   where the sidebars slide out. */
+.toggle-btn { display: none; }
+.toggle-btn[aria-pressed="true"] {
+  color: #ffe6ee;
+  border-color: rgba(224, 86, 122, 0.55);
+  background: linear-gradient(180deg, rgba(224, 86, 122, 0.16), #0b0b10 100%);
+}
+
+/* When a sidebar is open, the chat stage is inert so taps do not leak
+   through the gap between the panel edge and the screen edge. */
+body.ctl-open #stage,
+body.rail-open #stage { pointer-events: none; }
+
 /* ---------------- scrollbars / responsive ---------------- */
 
 ::-webkit-scrollbar { width: 9px; height: 9px; }
@@ -582,6 +633,10 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round
     box-shadow: -18px 0 50px rgba(0, 0, 0, 0.5);
   }
   body.ctl-open #controls { transform: none; }
+  body.ctl-open .scrim { opacity: 1; pointer-events: auto; }
+  /* On tablets the rail stays in the grid, only the controls panel slides out. */
+  #toggle-controls { display: grid; }
+  #toggle-rail { display: none; }
 }
 
 @media (max-width: 720px) {
@@ -595,6 +650,24 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round
     transition: transform 0.2s ease;
   }
   body.rail-open #rail { transform: none; }
+  body.rail-open .scrim { opacity: 1; pointer-events: auto; }
+  .topbar-actions #btn-compress { display: none; }
+  /* Both sidebars slide out on phones; the toggles are the only way in. */
+  #toggle-controls { display: grid; }
+  #toggle-rail { display: grid; }
+
+@media (max-width: 720px) {
+  #app { grid-template-columns: minmax(0, 1fr); }
+  #rail {
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    width: 232px;
+    z-index: 40;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+  }
+  body.rail-open #rail { transform: none; }
+  body.rail-open .scrim { opacity: 1; pointer-events: auto; }
   .topbar-actions #btn-compress { display: none; }
 
   /* Improve chat bubble readability on mobile */
@@ -615,4 +688,55 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round
   /* Prevent horizontal overflow */
   #thread { overflow-x: hidden; }
   .msg { overflow-wrap: break-word; word-break: break-word; }
+
+  /* Position the sidebar toggle buttons. They sit just above the
+     composer so they are always reachable, even with the keyboard open. */
+  #toggle-controls {
+    right: 14px;
+    bottom: 96px;
+  }
+  #toggle-rail {
+    left: 14px;
+    bottom: 96px;
+  }
+
+  /* The composer must stay above the on-screen keyboard. On iOS the
+     visual viewport reports the real offset; the JS adjusts bottom
+     dynamically, but this keeps it sane if JS is unavailable. */
+  #composer {
+    position: relative;
+    z-index: 30;
+    padding-bottom: max(18px, env(safe-area-inset-bottom));
+  }
+
+  /* Settings controls panel: full-width on narrow phones so the
+     dropdowns and chips are actually tappable. */
+  #controls {
+    width: min(360px, calc(100vw - 28px));
+    padding: 14px 12px 18px;
+  }
+  .ctl-split { grid-template-columns: 1fr; gap: 12px; }
+  .chip-select { font-size: 13px; padding: 9px 10px; min-height: 44px; }
+  .chip { padding: 8px 12px; font-size: 13px; min-height: 40px; }
+  .ctl-note { font-size: 12px; }
+  .custom-textarea { font-size: 14px; min-height: 44px; padding: 9px 11px; }
+  .model-select-row .ghost { min-height: 44px; }
+
+  /* Settings modal: full viewport width so it never overflows. */
+  .modal { padding: 10px; }
+  .modal-card {
+    width: min(420px, 100%);
+    max-height: min(88vh, 80vh);
+    padding: 14px;
+    gap: 10px;
+  }
+  .fld input, .fld select {
+    min-height: 44px;
+    font-size: 16px; /* 16px prevents iOS auto-zoom on focus */
+    padding: 10px 12px;
+  }
+  .fld input[type="checkbox"] { min-height: auto; }
+  .modal-actions { flex-wrap: wrap; gap: 8px; }
+  .modal-actions button { min-height: 44px; flex: 1 1 auto; }
+  .result { max-height: 200px; font-size: 12px; }
 }

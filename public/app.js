@@ -33,6 +33,85 @@ async function api(path, opts = {}) {
   return data;
 }
 
+/* ---------------- mobile sidebar toggles ---------------- */
+
+function toggleControls(open) {
+  const next = (open === undefined) ? !document.body.classList.contains('ctl-open') : open;
+  document.body.classList.toggle('ctl-open', next);
+  $('scrim').hidden = !next;
+  const b = $('toggle-controls');
+  if (b) { b.setAttribute('aria-pressed', String(next)); b.setAttribute('aria-label', next ? 'Close settings panel' : 'Open settings panel'); }
+  if (next) { closeRail(false); $('controls').scrollTop = 0; }
+  if (next) { try { $('controls').focus({ preventScroll: true }); } catch (e) {} }
+}
+
+function toggleRail(open) {
+  const next = (open === undefined) ? !document.body.classList.contains('rail-open') : open;
+  document.body.classList.toggle('rail-open', next);
+  $('scrim').hidden = !next;
+  const b = $('toggle-rail');
+  if (b) { b.setAttribute('aria-pressed', String(next)); b.setAttribute('aria-label', next ? 'Close conversation history' : 'Open conversation history'); }
+  if (next) { closeControls(false); $('history').scrollTop = 0; }
+}
+
+function closeControls(open) { if (open === false || open === undefined) toggleControls(false); }
+function closeRail(open) { if (open === false || open === undefined) toggleRail(false); }
+
+function syncToggles() {
+  const ctl = $('toggle-controls');
+  if (ctl) ctl.setAttribute('aria-pressed', String(document.body.classList.contains('ctl-open')));
+  const rail = $('toggle-rail');
+  if (rail) rail.setAttribute('aria-pressed', String(document.body.classList.contains('rail-open')));
+}
+
+/* ---------------- viewport helpers (mobile keyboard + dropdowns) ---------------- */
+
+function keyboardOffset() {
+  // On mobile browsers the layout viewport does not shrink when the
+  // on-screen keyboard opens; the visual viewport reports the real
+  // offset instead. Fall back to 0 on desktop.
+  const vv = window.visualViewport;
+  if (vv && window.innerWidth < 900) return Math.max(0, window.innerHeight - vv.height);
+  return 0;
+}
+
+function liftComposerForKeyboard() {
+  const composer = $('composer');
+  if (!composer) return;
+  const offset = keyboardOffset();
+  if (offset > 0) {
+    composer.style.marginBottom = -offset + 'px';
+    composer.style.transition = 'margin-bottom 0.15s ease';
+    // Scroll the active input into view above the keyboard.
+    const input = document.activeElement;
+    if (input && (input.id === 'input' || input.tagName === 'SELECT' || input.tagName === 'TEXTAREA')) {
+      input.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+  } else {
+    composer.style.marginBottom = '';
+  }
+}
+
+// Native <select> dropdowns are rendered by the OS. On small screens the
+// option list is often clipped by the viewport bottom. When the control
+// sits low, promote it to a list box so every option is reachable.
+function fitSelectDropdown(select) {
+  if (!select || window.innerWidth >= 900) return;
+  const rect = select.getBoundingClientRect();
+  const spaceBelow = window.innerHeight - rect.bottom;
+  if (spaceBelow < 240 && select.options.length > 4) {
+    select.setAttribute('size', String(Math.min(10, select.options.length)));
+    select.classList.add('select-list');
+  } else {
+    select.removeAttribute('size');
+    select.classList.remove('select-list');
+  }
+}
+
+function fitAllSelects() {
+  document.querySelectorAll('select').forEach(fitSelectDropdown);
+}
+
 /* ---------------- boot ---------------- */
 
 async function boot() {
@@ -49,6 +128,40 @@ async function boot() {
   } catch (e) {
     showError(e);
   }
+
+  // Wire up mobile sidebar toggles and viewport behaviour.
+  const ctlBtn = $('toggle-controls');
+  const railBtn = $('toggle-rail');
+  if (ctlBtn) ctlBtn.addEventListener('click', () => toggleControls());
+  if (railBtn) railBtn.addEventListener('click', () => toggleRail());
+  if ($('scrim')) $('scrim').addEventListener('click', () => { toggleControls(false); toggleRail(false); });
+  document.addEventListener('click', (ev) => {
+    if (ev.target.closest('#controls') || ev.target.closest('#rail') || ev.target.closest('.toggle-btn')) return;
+    if (document.body.classList.contains('ctl-open') || document.body.classList.contains('rail-open')) {
+      toggleControls(false);
+      toggleRail(false);
+    }
+  });
+
+  // Close sidebars on ESC.
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape') {
+      const closed = !document.body.classList.contains('ctl-open') && !document.body.classList.contains('rail-open');
+      toggleControls(false);
+      toggleRail(false);
+      if (closed) {
+        // Nothing open: dismiss the settings modal if it is up.
+        if (!$('settings-modal').hidden) $('settings-modal').hidden = true;
+      }
+    }
+  });
+
+  // Keep the composer above the mobile keyboard and the active control in view.
+  window.addEventListener('resize', () => { syncToggles(); fitAllSelects(); });
+  window.addEventListener('orientationchange', () => setTimeout(fitAllSelects, 300));
+  const vv = window.visualViewport;
+  if (vv) vv.addEventListener('resize', liftComposerForKeyboard);
+  fitAllSelects();
 }
 
 /* ---------------- controls ---------------- */
@@ -282,6 +395,8 @@ function buildControls() {
 function paintControls() {
   const p = state.conv ? state.conv.persona : state.config.persona;
   if (!p) return;
+
+  fitAllSelects();
 
   // Model select
   const modelSelect = $('c-model');
@@ -713,10 +828,49 @@ function renderMeta(meta) {
   updateModelBadge(meta.routing);
 }
 
-$('btn-settings').addEventListener('click', () => { fillSettingsForm(); $('settings-modal').hidden = false; });
+function openSettingsModal() {
+  fillSettingsForm();
+  // A modal and a slide-out sidebar fight for the same screen on mobile.
+  toggleControls(false);
+  toggleRail(false);
+  $('settings-modal').hidden = false;
+  fitAllSelects();
+}
+function closeSettingsModal() {
+  $('settings-modal').hidden = true;
+  liftComposerForKeyboard();
+}
+
+$('btn-settings').addEventListener('click', () => openSettingsModal());
 $('s-showall').addEventListener('change', (e) => { state.showAll = e.target.checked; fillSettingsForm(); });
-$('btn-close-settings').addEventListener('click', () => { $('settings-modal').hidden = true; });
-$('settings-modal').addEventListener('click', (ev) => { if (ev.target === $('settings-modal')) $('settings-modal').hidden = true; });
+$('btn-close-settings').addEventListener('click', () => closeSettingsModal());
+$('settings-modal').addEventListener('click', (ev) => { if (ev.target === $('settings-modal')) closeSettingsModal(); });
+// ESC is handled globally above; this guards the modal's own focus traps.
+$('settings-modal').addEventListener('keydown', (ev) => {
+  if (ev.key === 'Escape') { closeSettingsModal(); return; }
+  if (ev.key !== 'Tab') return;
+  const focusables = $('settings-modal').querySelectorAll('input, select, textarea, button, [href]');
+  if (!focusables.length) return;
+  const first = focusables[0];
+  const last = focusables[focusables.length - 1];
+  if (ev.shiftKey && document.activeElement === first) { ev.preventDefault(); last.focus(); }
+  else if (!ev.shiftKey && document.activeElement === last) { ev.preventDefault(); first.focus(); }
+});
+// On mobile the on-screen keyboard pushes the modal card up and out of
+// view. When an input inside the modal gains focus, scroll the card so the
+// active field (and the Save button) stay reachable.
+$('settings-modal').addEventListener('focus', (ev) => {
+  if (window.innerWidth >= 900) return;
+  const card = $('settings-modal').querySelector('.modal-card');
+  if (!card) return;
+  requestAnimationFrame(() => {
+    const r = ev.target.getBoundingClientRect();
+    const cr = card.getBoundingClientRect();
+    if (r.bottom > cr.bottom - 4) {
+      card.scrollTop += (r.bottom - cr.bottom) + 16;
+    }
+  });
+}, true);
 
 $('btn-test').addEventListener('click', async () => {
   const res = $('s-result');
@@ -766,7 +920,7 @@ $('btn-save-settings').addEventListener('click', async () => {
     state.config = r.config;
     fillSettingsForm();
     updateTopbar();
-    $('settings-modal').hidden = true;
+    closeSettingsModal();
     toast('Settings saved.');
   } catch (e) { showError(e); }
 });
@@ -837,7 +991,7 @@ $('btn-compress').addEventListener('click', async () => {
 /* ---------------- keyboard ---------------- */
 
 document.addEventListener('keydown', (ev) => {
-  if (ev.ctrlKey && ev.key === 'k') { ev.preventDefault(); $('settings-modal').hidden = !$('settings-modal').hidden; }
+  if (ev.ctrlKey && ev.key === 'k') { ev.preventDefault(); openSettingsModal(); }
   if (ev.ctrlKey && ev.key === 'n') { ev.preventDefault(); newConversation().catch(showError); }
 });
 
