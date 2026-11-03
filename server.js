@@ -518,6 +518,204 @@ const HARD_RULES = [
 ].join('\n- ');
 
 /* ------------------------------------------------------------------ *
+ *  Culture data for Indian/Western character generation
+ * ------------------------------------------------------------------ */
+
+const CULTURES = {
+  western: {
+    name: 'Western',
+    description: 'Default Western character generation',
+    names: {
+      first: ['Emma', 'Olivia', 'Ava', 'Isabella', 'Sophia', 'Charlotte', 'Mia', 'Amelia', 'Harper', 'Evelyn', 'Abigail', 'Emily', 'Ella', 'Madison', 'Scarlett', 'Victoria', 'Aria', 'Grace', 'Chloe', 'Camila', 'Sofia', 'Avery', 'Mila', 'Luna', 'Penelope', 'Layla', 'Nora', 'Lily', 'Hazel', 'Violet', 'Aurora', 'Savannah', 'Audrey', 'Brooklyn', 'Bella', 'Claire', 'Skylar', 'Lucy', 'Paisley', 'Everly', 'Anna', 'Caroline', 'Nova', 'Genesis', 'Emilia', 'Kennedy', 'Samantha', 'Maya', 'Willow', 'Kinsley'],
+      last: ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis', 'Rodriguez', 'Martinez', 'Hernandez', 'Lopez', 'Gonzalez', 'Wilson', 'Anderson', 'Thomas', 'Taylor', 'Moore', 'Jackson', 'Martin', 'Lee', 'Perez', 'Thompson', 'White', 'Harris', 'Sanchez', 'Clark', 'Ramirez', 'Lewis', 'Robinson', 'Walker', 'Young', 'Allen', 'King', 'Wright', 'Scott', 'Torres', 'Nguyen', 'Hill', 'Flores', 'Green', 'Adams', 'Nelson', 'Baker', 'Hall', 'Rivera', 'Campbell', 'Mitchell', 'Carter', 'Roberts']
+    },
+    regions: ['American', 'British', 'Canadian', 'Australian', 'European', 'Latin American'],
+    hometowns: ['a mid-sized city', 'a coastal town', 'a suburban neighborhood', 'a rural farming community', 'a bustling metro area', 'a college town', 'a historic downtown district', 'a mountain resort town', 'a lakeside community', 'a desert oasis city'],
+    occupations: [
+      'works in marketing', 'is a freelance designer', 'teaches literature', 'works in tech', 'manages a small team',
+      'is a writer', 'works in healthcare', 'runs a small business', 'is a chef', 'works in finance',
+      'is an artist', 'is a lawyer', 'works in retail', 'is a nurse', 'works in real estate',
+      'is a photographer', 'works in hospitality', 'is a consultant', 'works in media', 'is a therapist'
+    ],
+    hobbies: [
+      'hiking on weekends', 'cooking for friends', 'reading before bed', 'yoga in the mornings',
+      'going to gigs', 'painting', 'long walks with a podcast', 'trying new restaurants', 'photography',
+      'dancing', 'gardening', 'board games with friends', 'surfing', 'skiing', 'wine tasting',
+      'craft cocktails', 'thrifting', 'baking sourdough', 'running half-marathons', 'rock climbing'
+    ],
+    secrets: [
+      'still talks to an ex she should not', 'has a tattoo she never shows', 'is saving up to move abroad',
+      'once performed in a play', 'has a secret novel in a drawer', 'used to be a competitive dancer',
+      'has a fear of deep water she hides', 'is the family member everyone calls for advice',
+      'once backpacked alone for a year', 'has a private podcast no one knows about',
+      'owes money to someone sketchy', 'got fired and hasnt told her parents',
+      'has a hidden social media account', 'once won a contest she never mentions'
+    ],
+    familyStructures: [
+      { hasPartner: 0.4, hasChildren: 0.25, hasSiblings: 0.7, parentsAlive: 0.85 },
+      { hasPartner: 0.5, hasChildren: 0.4, hasSiblings: 0.6, parentsAlive: 0.8 },
+      { hasPartner: 0.3, hasChildren: 0.15, hasSiblings: 0.8, parentsAlive: 0.9 }
+    ],
+    partnerNames: ['Jake', 'Michael', 'David', 'Chris', 'Ryan', 'James', 'John', 'Robert', 'Daniel', 'Matthew', 'Sarah', 'Jessica', 'Emily', 'Ashley', 'Amanda'],
+    childrenNames: ['Emma', 'Liam', 'Noah', 'Oliver', 'Elijah', 'Lucas', 'Mason', 'Logan', 'Sophia', 'Olivia', 'Ava', 'Isabella', 'Mia', 'Charlotte'],
+    speechPatterns: {
+      greetings: ['hey', 'hi there', 'hello', 'yo', 'whats up', 'hey you'],
+      fillers: ['like', 'you know', 'honestly', 'literally', 'basically', 'I mean'],
+      emphasis: ['so', 'really', 'totally', 'absolutely', 'definitely'],
+      agreement: ['yeah', 'yep', 'totally', 'for sure', 'absolutely', 'right'],
+      disagreement: ['nah', 'not really', 'I dont think so', 'eh', 'not quite']
+    }
+  },
+  indian: {
+    name: 'Indian',
+    description: 'Authentic Indian character generation with regional diversity',
+    names: {
+      bengali: { first: ['Ananya', 'Diya', 'Ishani', 'Riya', 'Sriya', 'Tiyasha', 'Ushoshi', 'Piyali', 'Moumita', 'Shreyasi', 'Debaleena', 'Raima', 'Sohini', 'Aditi', 'Sudeshna', 'Piya', 'Shreeja', 'Tanisha', 'Ridhima', 'Krittika'], last: ['Banerjee', 'Bhattacharya', 'Chatterjee', 'Das', 'Dutta', 'Ganguly', 'Ghosh', 'Lahiri', 'Majumdar', 'Mukherjee', 'Sengupta', 'Bose', 'Ray', 'Sarkar', 'Pal', 'Jana', 'Mondal', 'Biswas'] },
+      punjabi: { first: ['Amandeep', 'Harleen', 'Jasleen', 'Manpreet', 'Navdeep', 'Parmeet', 'Ravneet', 'Simran', 'Tavleen', 'Yashvi', 'Gurleen', 'Prabhjot', 'Amarjot', 'Heer', 'Noor', 'Kiran', 'Sonia', 'Preeti', 'Meera', 'Isha'], last: ['Singh', 'Kaur', 'Gill', 'Dhillon', 'Sidhu', 'Brar', 'Sandhu', 'Virk', 'Cheema', 'Bains', 'Jutt', 'Randhawa', 'Malhi', 'Grewal', 'Bajwa', 'Saini', 'Maan', 'Kahlon'] },
+      marathi: { first: ['Aarya', 'Disha', 'Gauri', 'Janhavi', 'Kiara', 'Lavanya', 'Meera', 'Naina', 'Pari', 'Rutuja', 'Sai', 'Trupti', 'Urvi', 'Vedika', 'Yashoda', 'Anika', 'Shruti', 'Pooja', 'Neha', 'Priya'], last: ['Deshmukh', 'Patil', 'Shinde', 'Jadhav', 'Pawar', 'Bhosale', 'Chavan', 'More', 'Shelke', 'Gaikwad', 'Kadam', 'Nikam', 'Raut', 'Thakur', 'Yadav', 'Gupta', 'Sharma', 'Kulkarni'] },
+      gujarati: { first: ['Aarushi', 'Diya', 'Esha', 'Hetal', 'Ishita', 'Jinal', 'Kajal', 'Meera', 'Nisha', 'Payal', 'Riya', 'Sejal', 'Trisha', 'Urvi', 'Vrinda', 'Yashvi', 'Aditi', 'Shreya', 'Anjali', 'Divya'], last: ['Patel', 'Shah', 'Kumar', 'Desai', 'Mehta', 'Joshi', 'Amin', 'Parmar', 'Chauhan', 'Rana', 'Solanki', 'Thakkar', 'Modi', 'Kapadia', 'Vora', 'Gandhi', 'Rao', 'Reddy'] },
+      tamil: { first: ['Abinaya', 'Divya', 'Eshwari', 'Gayathri', 'Hema', 'Indhu', 'Janani', 'Kavya', 'Lakshmi', 'Meena', 'Nithya', 'Priya', 'Radha', 'Shalini', 'Tamizh', 'Usha', 'Varsha', 'Yamuna', 'Aishwarya', 'Deepika'], last: ['Iyer', 'Iyengar', 'Nair', 'Menon', 'Pillai', 'Reddy', 'Gounder', 'Naidu', 'Chettiar', 'Mudaliar', 'Thevar', 'Vanniyar', 'Gupta', 'Sharma', 'Kumar', 'Raj', 'Singh', 'Das'] },
+      telugu: { first: ['Akhila', 'Bhavya', 'Charishma', 'Deepthi', 'Eesha', 'Geetha', 'Harshitha', 'Indu', 'Jhansi', 'Kalyani', 'Lavanya', 'Madhuri', 'Navya', 'Oviya', 'Prathyusha', 'Ragini', 'Sowmya', 'Tejaswini', 'Ujjwala', 'Vasantha'], last: ['Reddy', 'Naidu', 'Chowdary', 'Rao', 'Murthy', 'Kumar', 'Krishna', 'Raju', 'Setty', 'Naidu', 'Goud', 'Yadav', 'Kamma', 'Kapu', 'Balija', 'Velama', 'Brahmin', 'Kayastha'] },
+      malayali: { first: ['Aiswarya', 'Devika', 'Fathima', 'Gayathri', 'Helen', 'Irene', 'Jyothi', 'Karthika', 'Lekshmi', 'Maya', 'Neena', 'Parvathy', 'Remya', 'Sandra', 'Theresa', 'Urmila', 'Vidya', 'Zainab', 'Anju', 'Beena'], last: ['Nair', 'Menon', 'Pillai', 'Kurup', 'Panicker', 'Gopan', 'Dev', 'Das', 'Kumar', 'Reddy', 'Thomas', 'Joseph', 'George', 'Mathew', 'John', 'Philip', 'Abraham', 'Jacob'] },
+      assamese: { first: ['Ankita', 'Bipasha', 'Chandana', 'Dipali', 'Hemlata', 'Indira', 'Jyotika', 'Kanaklata', 'Lakhimi', 'Mamoni', 'Nirmali', 'Oinam', 'Parijat', 'Rupal', 'Suchitra', 'Tara', 'Urmila', 'Vibha', 'Yasmin', 'Zerifa'], last: ['Bora', 'Chetia', 'Das', 'Dutta', 'Gogoi', 'Hazarika', 'Kalita', 'Mahanta', 'Saikia', 'Sharma', 'Barua', 'Bhuyan', 'Rabha', 'Miri', 'Boro', 'Kachari', 'Nath', 'Yadav'] },
+      northIndian: { first: ['Aarti', 'Bharti', 'Chhaya', 'Deepika', 'Ekta', 'Farah', 'Geeta', 'Heena', 'Isha', 'Jyoti', 'Kavita', 'Lata', 'Meera', 'Naina', 'Pooja', 'Ritu', 'Sapna', 'Usha', 'Vandana', 'Zoya'], last: ['Sharma', 'Verma', 'Gupta', 'Agarwal', 'Jain', 'Saxena', 'Mittal', 'Garg', 'Bansal', 'Singhal', 'Kumar', 'Singh', 'Rajput', 'Thakur', 'Chauhan', 'Rana', 'Rathore', 'Sisodiya'] },
+      southIndian: { first: ['Asha', 'Bhagya', 'Chitra', 'Dharani', 'Ezhil', 'Ganga', 'Hema', 'Ilakkiya', 'Jhanvi', 'Kanimozhi', 'Latha', 'Mallika', 'Nila', 'Oviya', 'Pavithra', 'Queena', 'Rani', 'Selvi', 'Thangam', 'Uma'], last: ['Iyer', 'Iyengar', 'Nair', 'Menon', 'Pillai', 'Reddy', 'Naidu', 'Chowdary', 'Rao', 'Murthy', 'Setty', 'Gounder', 'Chettiar', 'Mudaliar', 'Thevar', 'Vanniyar', 'Balija', 'Kapu'] }
+    },
+    regions: ['Bengali', 'Punjabi', 'Marathi', 'Gujarati', 'Tamil', 'Telugu', 'Malayali', 'Assamese', 'North Indian', 'South Indian'],
+    hometowns: {
+      bengali: ['Kolkata', 'Howrah', 'Durgapur', 'Asansol', 'Siliguri', 'Darjeeling hills', 'Sundarbans delta', 'Bardhaman', 'Malda', 'Murshidabad'],
+      punjabi: ['Amritsar', 'Ludhiana', 'Jalandhar', 'Patiala', 'Chandigarh', 'Bathinda', 'Moga', 'Pathankot', 'Hoshiarpur', 'Firozpur'],
+      marathi: ['Mumbai', 'Pune', 'Nagpur', 'Nashik', 'Aurangabad', 'Kolhapur', 'Solapur', 'Amravati', 'Sangli', 'Satara'],
+      gujarati: ['Ahmedabad', 'Surat', 'Vadodara', 'Rajkot', 'Bhavnagar', 'Jamnagar', 'Gandhinagar', 'Anand', 'Navsari', 'Morbi'],
+      tamil: ['Chennai', 'Coimbatore', 'Madurai', 'Tiruchirappalli', 'Salem', 'Tirunelveli', 'Erode', 'Vellore', 'Thoothukudi', 'Thanjavur'],
+      telugu: ['Hyderabad', 'Visakhapatnam', 'Vijayawada', 'Guntur', 'Nellore', 'Kurnool', 'Kakinada', 'Rajahmundry', 'Tirupati', 'Warangal'],
+      malayali: ['Thiruvananthapuram', 'Kochi', 'Kozhikode', 'Thrissur', 'Kollam', 'Kannur', 'Alappuzha', 'Palakkad', 'Malappuram', 'Kottayam'],
+      assamese: ['Guwahati', 'Silchar', 'Dibrugarh', 'Jorhat', 'Nagaon', 'Tinsukia', 'Tezpur', 'Bongaigaon', 'Diphu', 'North Lakhimpur'],
+      northIndian: ['Delhi', 'Jaipur', 'Lucknow', 'Kanpur', 'Varanasi', 'Agra', 'Prayagraj', 'Meerut', 'Bareilly', 'Aligarh'],
+      southIndian: ['Bangalore', 'Mysore', 'Mangalore', 'Hubli', 'Belgaum', 'Gulbarga', 'Davangere', 'Bellary', 'Bidar', 'Raichur']
+    },
+    occupations: [
+      'works in IT in Bangalore', 'is a software engineer in Hyderabad', 'teaches at a local college', 'works in marketing in Mumbai',
+      'manages a family business', 'is a doctor at a government hospital', 'works in banking', 'is a freelance content writer',
+      'runs a small boutique', 'works in HR at a multinational', 'is a data analyst', 'works in customer service',
+      'is a graphic designer', 'teaches school', 'works in pharmaceuticals', 'is a nutritionist',
+      'manages a restaurant', 'works in aviation', 'is a financial advisor', 'does social media management',
+      'is an architect', 'works in e-commerce', 'is a startup founder', 'teaches dance or music', 'is a journalist'
+    ],
+    hobbies: [
+      'Bollywood dance classes', 'cooking regional recipes', 'watching cricket matches', 'yoga and meditation',
+      'reading Hindi/regional novels', 'classical music concerts', 'street food exploration', 'shopping at local markets',
+      'Instagram reels creation', 'family gatherings and festivals', 'long drives with friends', 'karaoke nights',
+      'painting rangoli', 'gardening with family', 'online gaming', 'binge-watching web series',
+      'weekend trekking', 'photography at weddings', 'trying new cafes', 'attending cultural events'
+    ],
+    secrets: [
+      'has a secret relationship her family doesnt know about', 'wants to move abroad but hasnt told anyone',
+      'is in love with someone from a different community', 'has a hidden Instagram account',
+      'once ran away from home for a few days', 'has tattoos her parents havent seen',
+      'is secretly in debt from online shopping', 'has applied for jobs abroad without telling family',
+      'had a relationship that ended badly', 'is seeing a therapist but hides it',
+      'wants to break an arranged engagement', 'has a child from a past relationship no one knows about',
+      'is secretly writing a novel', 'owes money to a loan shark',
+      'once lied about her qualifications to get a job'
+    ],
+    familyStructures: [
+      { hasPartner: 0.35, hasChildren: 0.3, hasSiblings: 0.85, parentsAlive: 0.9, arrangedMarriage: 0.4 },
+      { hasPartner: 0.45, hasChildren: 0.5, hasSiblings: 0.75, parentsAlive: 0.85, arrangedMarriage: 0.6 },
+      { hasPartner: 0.25, hasChildren: 0.15, hasSiblings: 0.9, parentsAlive: 0.95, arrangedMarriage: 0.2 },
+      { hasPartner: 0.5, hasChildren: 0.6, hasSiblings: 0.7, parentsAlive: 0.8, arrangedMarriage: 0.7 }
+    ],
+    partnerNames: ['Arjun', 'Rahul', 'Amit', 'Raj', 'Vikram', 'Rohan', 'Karan', 'Aditya', 'Sanjay', 'Deepak', 'Neha', 'Priya', 'Anjali', 'Sneha', 'Kavya'],
+    childrenNames: ['Aarav', 'Vihaan', 'Aditya', 'Sai', 'Reyansh', 'Ayaan', 'Krishna', 'Arjun', 'Rohan', 'Ishaan', 'Aanya', 'Diya', 'Pari', 'Aarohi', 'Ananya', 'Ishani', 'Myra', 'Sara'],
+    speechPatterns: {
+      greetings: ['namaste', 'hey', 'hi there', 'hello', 'hola', 'kaise ho', 'kya haal hai'],
+      fillers: ['yaar', 'like', 'you know', 'actually', 'basically', 'I mean', 'na', 'hai na'],
+      emphasis: ['bohot', 'bahut', 'really', 'so much', 'full', 'proper', 'bilkul'],
+      agreement: ['haan', 'yes', 'yeah', 'bilkul', 'sahi hai', 'thik hai', 'absolutely'],
+      disagreement: ['nahi', 'not really', 'yaar but...', 'arey nahi', 'thoda sa'],
+      indianExpressions: ['yaar', 'arre', 'wah', 'oh my god', 'what to do', 'only', 'itself', 'no tension', 'time pass', 'pass out', 'prepone', 'do one thing']
+    }
+  }
+};
+
+/* Generate Indian character biography based on region */
+function generateIndianCharacter(age, culture) {
+  const regions = culture.regions;
+  // Weight regions by population/usage to avoid some being chosen too often
+  const regionWeights = regions.map(r => {
+    const key = r.toLowerCase().replace(' ', '');
+    return (key === 'bengali' ? 8 : key === 'punjabi' ? 10 : key === 'marathi' ? 8 : key === 'gujarati' ? 7 : key === 'tamil' ? 10 : key === 'telugu' ? 9 : key === 'malayali' ? 6 : key === 'assamese' ? 4 : 1);
+  });
+  const totalWeight = regionWeights.reduce((a, b) => a + b, 0);
+  const rand = Math.random() * totalWeight;
+  let cumulative = 0;
+  let region = regions[0];
+  for (let i = 0; i < regions.length; i++) {
+    cumulative += regionWeights[i];
+    if (rand <= cumulative) {
+      region = regions[i];
+      break;
+    }
+  }
+  const regionKey = region.toLowerCase().replace(' ', '');
+  const regionData = culture.names[regionKey] || culture.names.northIndian;
+
+  const firstName = regionData.first[Math.floor(Math.random() * regionData.first.length)];
+  const lastName = regionData.last[Math.floor(Math.random() * regionData.last.length)];
+
+  const hometowns = typeof culture.hometowns === 'object'
+    ? culture.hometowns[regionKey] || culture.hometowns.northIndian
+    : culture.hometowns;
+  const hometown = hometowns[Math.floor(Math.random() * hometowns.length)];
+
+  const familyStructures = culture.familyStructures;
+  const familyType = familyStructures[Math.floor(Math.random() * familyStructures.length)];
+
+  const hasPartner = Math.random() < familyType.hasPartner;
+  const hasChildren = hasPartner && Math.random() < (familyType.hasChildren || 0.3);
+  const hasSiblings = Math.random() < (familyType.hasSiblings || 0.8);
+
+  const occupation = culture.occupations[Math.floor(Math.random() * culture.occupations.length)];
+  const hobby = culture.hobbies[Math.floor(Math.random() * culture.hobbies.length)];
+  const secret = culture.secrets[Math.floor(Math.random() * culture.secrets.length)];
+
+  const facts = {
+    region,
+    firstName,
+    lastName,
+    hometown,
+    occupation,
+    hobby,
+    age
+  };
+
+  if (hasPartner) {
+    facts.relationshipStatus = familyType.arrangedMarriage ? 'in an arranged marriage' : 'in a relationship';
+    facts.partnerName = culture.partnerNames[Math.floor(Math.random() * culture.partnerNames.length)];
+  }
+  if (hasChildren) {
+    facts.hasChildren = true;
+    facts.childrenCount = Math.floor(Math.random() * 2) + 1;
+    facts.childrenNames = Array(facts.childrenCount).fill(null).map(() =>
+      culture.childrenNames[Math.floor(Math.random() * culture.childrenNames.length)]
+    );
+  }
+  if (hasSiblings) {
+    facts.hasSiblings = true;
+    facts.siblingsCount = Math.floor(Math.random() * 3) + 1;
+  }
+
+  return {
+    establishedFacts: facts,
+    userDefinedPremises: [],
+    sceneContext: '',
+    revealedDetails: [],
+    relationships: hasPartner ? { partner: { name: facts.partnerName, status: 'to be revealed' } } : {},
+    secrets: [secret]
+  };
+}
+
+/* ------------------------------------------------------------------ *
  *  Settings
  * ------------------------------------------------------------------ */
 
@@ -549,7 +747,8 @@ const DEFAULT_SETTINGS = {
     consistency: 'flexible',
     roleplay: 'dialogue',
     creativity: 'grounded',
-    customPersonality: ''
+    customPersonality: '',
+    culture: 'western'
   },
   bindHost: '0.0.0.0',
   allowLAN: true
@@ -563,11 +762,13 @@ const PERSONA_TABLES = {
   style: STYLES, flirting: FLIRT_LEVELS, consistency: CONSISTENCY,
   roleplay: ROLEPLAY_STYLE, creativity: CREATIVITIES
 };
+const CULTURES_TABLE = { western: true, indian: true };
 function repairPersona(p) {
   for (const [key, table] of Object.entries(PERSONA_TABLES)) {
     if (!table[p[key]]) p[key] = DEFAULT_SETTINGS.persona[key];
   }
   if (p.secondaryTrait && !PERSONALITIES[p.secondaryTrait]) p.secondaryTrait = '';
+  if (!CULTURES_TABLE[p.culture]) p.culture = DEFAULT_SETTINGS.persona.culture;
   p.age = clampAge(p.age);
   return p;
 }
@@ -611,23 +812,42 @@ async function loadConv(id) {
   c.messages = Array.isArray(c.messages) ? c.messages : [];
   c.persona = { ...DEFAULT_SETTINGS.persona, ...(c.persona || {}) };
   c.persona.age = clampAge(c.persona.age);
+  // Ensure culture is preserved
+  if (!CULTURES_TABLE[c.persona.culture]) c.persona.culture = DEFAULT_SETTINGS.persona.culture;
   c.memory = c.memory || '';
   c.recent = c.recent || { openers: [], moves: [], endearments: [] };
   // Character state for dynamic backstory continuity
-  c.characterState = c.characterState || generateInitialCharacterState(c.persona.age);
+  c.characterState = c.characterState || generateInitialCharacterState(c.persona.age, c.persona.mode, c.persona.culture);
   // Sanitize character state: remove temporary scene state that may have
   // been polluted by a previous scene's refusals or stale context
   c.characterState = sanitizeCharacterState(c.characterState);
   return c;
 }
 
-/* Generate plausible, varied initial character state based on age.
+/* Generate plausible, varied initial character state based on age and culture.
    Not every field is filled — some characters are simple, some detailed. */
-function generateInitialCharacterState(age, mode = 'open') {
+function generateInitialCharacterState(age, mode = 'open', culture = 'western') {
   const n = Number(age);
   // Adult and roleplay modes should NOT have restrictive partner/children states
   // that cause the model to resist sexual scenarios.
   const isUnrestricted = ['adult', 'roleplay', 'flirtation', 'romance', 'open'].includes(mode);
+
+  // Use culture-specific generation
+  if (culture === 'indian') {
+    const character = generateIndianCharacter(n, CULTURES.indian);
+    // Ensure adult-mode Indian characters are naturally comfortable with adult themes
+    // and have individual personalities - do not force conservatism or asexuality
+    if (mode === 'adult' || mode === 'flirtation' || mode === 'romance') {
+      // Mark as open to adult conversation in the secrets field if not already
+      if (!character.establishedFacts.secret.includes('open to adult themes') &&
+          !character.establishedFacts.secret.includes('comfortable with')) {
+        character.establishedFacts.secret = (character.establishedFacts.secret || '') + ' open to adult conversation';
+      }
+    }
+    return character;
+  }
+
+  // Western (default) generation
   const hasChildren = !isUnrestricted && Math.random() < 0.35;
   const hasPartner = !isUnrestricted && Math.random() < 0.5;
   const occupations = [
@@ -715,6 +935,25 @@ function buildSystem(settings, conv, move) {
   }
   if (p.personality === 'custom' && p.customPersonality && p.customPersonality.trim()) {
     lines.push(`- Custom personality: ${p.customPersonality.trim()}`);
+  }
+
+  // Culture-specific identity and background
+  if (p.culture === 'indian') {
+    const culture = CULTURES.indian;
+    const facts = cs.establishedFacts || {};
+    const firstName = facts.firstName || '';
+    const lastName = facts.lastName || '';
+    if (facts.region) {
+      lines.push(`- Cultural background: ${facts.region} Indian woman named ${firstName} ${lastName}, from ${facts.hometown}.`);
+    } else {
+      lines.push(`- Cultural background: Indian woman named ${firstName} ${lastName}.`);
+    }
+    lines.push(`- Speaks natural conversational English with occasional Indian expressions (yaar, arre, bilkul, sahi hai, na, hai na, bohot, thik hai) and code-switching where natural.`);
+    lines.push(`- Does not default to stereotypes. Not defined by religion, conservatism, marriage, shyness, or submission unless specifically established. Her background informs her life without defining her entire personality.`);
+    lines.push(`- Can use natural adult language, profanity, teasing, provocative flirting, and sexually confident dialogue when appropriate to her established personality and the conversation.`);
+    lines.push(`- Personality evolves gradually through conversation: may be reserved, playful, confident, formal, teasing, curious, bold, or flirtatious initially. As rapport develops, may become more expressive, uninhibited, provocative, and comfortable discussing adult subjects. Some may be bold from the start; others take time. The transition must feel organic and consistent with her history, temperament, experiences, and established relationship with the user.`);
+    lines.push(`- Never automatically sanitize ordinary adult conversations because of cultural selection. Do not insert repetitive disclaimers, unnecessary refusals, or out-of-character explanations.`);
+    lines.push(`- Maintain the same response-style controls and content boundaries that govern the system. Culture selection does not override model or provider restrictions.`);
   }
   lines.push('');
   lines.push('## How you write');
@@ -1387,6 +1626,7 @@ const server = http.createServer(async (req, res) => {
         flirting: Object.keys(FLIRT_LEVELS),
         consistency: Object.keys(CONSISTENCY),
         roleplay: Object.keys(ROLEPLAY_STYLE),
+        cultures: Object.keys(CULTURES),
         bindHost: DEFAULT_SETTINGS.bindHost,
         allowLAN: DEFAULT_SETTINGS.allowLAN
       });
@@ -1399,7 +1639,7 @@ const server = http.createServer(async (req, res) => {
       const s = await loadSettings();
       const persona = { ...s.persona, ...(body.persona || {}) };
       persona.age = clampAge(persona.age);
-      const conv = { id: newId(), title: '', createdAt: Date.now(), updatedAt: Date.now(), persona, messages: [], memory: '', recent: { openers: [], moves: [], endearments: [] }, characterState: generateInitialCharacterState(persona.age, persona.mode) };
+      const conv = { id: newId(), title: '', createdAt: Date.now(), updatedAt: Date.now(), persona, messages: [], memory: '', recent: { openers: [], moves: [], endearments: [] }, characterState: generateInitialCharacterState(persona.age, persona.mode, persona.culture) };
       await saveConv(conv);
       return send(res, 200, { conv });
     }
