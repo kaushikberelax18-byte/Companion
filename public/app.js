@@ -87,6 +87,7 @@ const LABELS = {
   consistency: { flexible: 'Flexible', strong: 'Strong' },
   roleplay: { dialogue: 'Dialogue-Focused', descriptive: 'Descriptive' },
   creativities: { grounded: 'Grounded', spontaneous: 'Spontaneous' },
+  cultures: { western: 'Western (Default)', indian: 'Indian' },
 };
 
 function buildControls() {
@@ -122,6 +123,17 @@ function buildControls() {
     ageSelect.appendChild(opt);
   }
   ageSelect.onchange = (e) => applyPersonaChange('age', Number(e.target.value));
+
+  // Culture select
+  const cultureSelect = $('c-culture');
+  cultureSelect.innerHTML = '';
+  for (const id of (state.options.cultures || ['western', 'indian'])) {
+    const opt = document.createElement('option');
+    opt.value = id;
+    opt.textContent = LABELS.cultures[id] || id;
+    cultureSelect.appendChild(opt);
+  }
+  cultureSelect.onchange = (e) => applyPersonaChange('culture', e.target.value);
 
   // Personality select
   const persSelect = $('c-personality');
@@ -279,11 +291,12 @@ function paintControls() {
 
   // Age select
   $('c-age').value = p.age || 25;
+  $('c-culture').value = p.culture || 'western';
   $('c-personality').value = p.personality || 'playful';
   $('c-secondaryTrait').value = p.secondaryTrait || '';
   $('c-length').value = p.length || 'medium';
   $('c-initiative').value = p.initiative || 'balanced';
-  $('c-style').value = p.style || 'casual';
+  $('c-style').value = p.style || 'edgy';
   $('c-flirting').value = p.flirting || 'playful';
   $('c-consistency').value = p.consistency || 'flexible';
   $('c-roleplay').value = p.roleplay || 'dialogue';
@@ -300,7 +313,7 @@ function paintControls() {
 
 function applyPersonaChange(key, value) {
   if (!state.conv) return;
-  if (key === 'age' || key === 'personality' || key === 'mode' || key === 'model') {
+  if (key === 'age' || key === 'personality' || key === 'mode' || key === 'model' || key === 'culture') {
     state.dirtyPersona = true;
     $('btn-opening').classList.add('glow');
   }
@@ -342,6 +355,7 @@ function applyPersonaChange(key, value) {
       paintControls();
       updateTopbar();
       if (key === 'age') toast('Age set to ' + value + ' — she talks differently now.');
+      if (key === 'culture') toast('Culture set to ' + (LABELS.cultures[value] || value) + ' — new characters will use this culture.');
     })
     .catch(showError);
 }
@@ -538,7 +552,8 @@ function updateTopbar() {
   const p = state.conv.persona;
   const pers = (LABELS.personalities[p.personality] || p.personality).toLowerCase();
   const mode = (LABELS.modes[p.mode] || p.mode).toLowerCase();
-  $('persona-sub').textContent = `${p.age} · ${pers} · ${mode}`;
+  const culture = p.culture === 'indian' ? 'Indian' : 'Western';
+  $('persona-sub').textContent = `${p.age} · ${pers} · ${mode} · ${culture}`;
   $('avatar').textContent = state.config.name.charAt(0).toUpperCase();
 }
 
@@ -759,6 +774,24 @@ $('btn-save-settings').addEventListener('click', async () => {
 /* ---------------- actions ---------------- */
 
 $('btn-new').addEventListener('click', async () => { try { await newConversation(); } catch (e) { showError(e); } });
+
+$('btn-regen').addEventListener('click', async () => {
+  if (!state.conv) return;
+  if (!confirm('Generate a completely new random character with the current culture setting? This will create a new conversation.')) return;
+  try {
+    const r = await api('/api/conversations', { body: { persona: { culture: state.conv.persona.culture || 'western' } } });
+    state.conv = r.conv;
+    state.dirtyPersona = false;
+    $('btn-opening').classList.remove('glow');
+    renderThread();
+    paintControls();
+    updateTopbar();
+    await loadHistory();
+    try {
+      await greeting(r.conv.id);
+    } catch (e) { showError(e); }
+  } catch (e) { showError(e); }
+});
 
 $('btn-send').addEventListener('click', send);
 $('input').addEventListener('keydown', (ev) => {

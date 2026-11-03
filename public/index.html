@@ -18,6 +18,7 @@
       </button>
     </div>
     <button id="btn-new" class="primary-block">New conversation</button>
+    <button id="btn-regen" class="ghost" title="Generate a new random character with current culture setting" aria-label="Regenerate character">Regenerate Character</button>
     <div class="rail-label">History</div>
     <nav id="history" aria-label="Conversation history"></nav>
     <div class="rail-foot">
@@ -73,6 +74,12 @@
       <div class="ctl-title">Age</div>
       <select id="c-age" class="chip-select" aria-label="Age"></select>
       <div class="ctl-note" id="age-note"></div>
+    </div>
+
+    <div class="ctl-group">
+      <div class="ctl-title">Character Culture</div>
+      <select id="c-culture" class="chip-select" aria-label="Character Culture"></select>
+      <div class="ctl-note" id="culture-note">Western is the default. Indian generates culturally authentic adult Indian women with diverse regional backgrounds.</div>
     </div>
 
     <div class="ctl-group">
