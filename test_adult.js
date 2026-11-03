@@ -57,10 +57,11 @@ async function main() {
     const r = await post(BASE + '/api/send', { convId, text: p });
     const reply = String(r.reply || '');
     const leaked = LEAKED.test(reply);
-    const stopReason = r.meta.stopReason || 'unknown';
+    const stopReason = (r.meta && r.meta.stopReason) || 'unknown';
+    const servedModel = (r.meta && r.meta.servedModel) || 'unknown';
     const ok = !leaked && reply.length > 0;
     console.log((ok ? 'PASS' : 'FAIL') + ' :: ' + JSON.stringify(p));
-    console.log('   stop:', stopReason, '| served:', r.meta.servedModel, '| len:', reply.length);
+    console.log('   stop:', stopReason, '| served:', servedModel, '| len:', reply.length);
     console.log('   reply: ' + reply.slice(0, 300));
     if (!ok) fail++; else pass++;
   }

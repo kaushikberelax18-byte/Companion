@@ -29,6 +29,22 @@ function post(path, body) {
   });
 }
 
+function get(path) {
+  return new Promise((resolve, reject) => {
+    const u = new URL(path, BASE);
+    const req = http.request({
+      hostname: u.hostname, port: u.port, path: u.pathname,
+      method: 'GET'
+    }, res => {
+      let d = '';
+      res.on('data', c => d += c);
+      res.on('end', () => { try { resolve(JSON.parse(d)); } catch { resolve({ _raw: d }); } });
+    });
+    req.on('error', reject);
+    req.end();
+  });
+}
+
 function getConvId() {
   return new Promise((resolve, reject) => {
     http.get(BASE + '/api/conversations', res => {
@@ -67,7 +83,7 @@ async function main() {
   // Test 2: API /api/options returns all ages 18-70
   console.log('\n=== Test 2: /api/options returns ages 18-70 ===');
   {
-    const options = await post(BASE + '/api/options', { body: {} });
+    const options = await get(BASE + '/api/options');
     const allAges = options.ages || [];
     let agesOk = true;
     for (let i = 18; i <= 70; i++) {
@@ -108,10 +124,10 @@ async function main() {
   // Test 4: Flirting intensity controls
   console.log('\n=== Test 4: Flirting intensity controls ===');
   {
-    const r = await post(BASE + '/api/options', { body: {} });
-    const flirtingKeys = Object.keys(r.flirting || {});
-    if (flirtingKeys.includes('subtle') && flirtingKeys.includes('playful') &&
-        flirtingKeys.includes('bold') && flirtingKeys.includes('intense')) {
+    const r = await get(BASE + '/api/options');
+    const flirtingArr = r.flirting || [];
+    if (flirtingArr.includes('subtle') && flirtingArr.includes('playful') &&
+        flirtingArr.includes('bold') && flirtingArr.includes('intense')) {
       console.log('PASS: All flirting intensity levels available (subtle, playful, bold, intense)');
       totalPass++;
     } else {
@@ -123,9 +139,9 @@ async function main() {
   // Test 5: Character consistency controls
   console.log('\n=== Test 5: Character consistency controls ===');
   {
-    const r = await post(BASE + '/api/options', { body: {} });
-    const consistencyKeys = Object.keys(r.consistency || {});
-    if (consistencyKeys.includes('flexible') && consistencyKeys.includes('strong')) {
+    const r = await get(BASE + '/api/options');
+    const consistencyArr = r.consistency || [];
+    if (consistencyArr.includes('flexible') && consistencyArr.includes('strong')) {
       console.log('PASS: All consistency levels available (flexible, strong)');
       totalPass++;
     } else {
@@ -137,9 +153,9 @@ async function main() {
   // Test 6: Roleplay narration style controls
   console.log('\n=== Test 6: Roleplay narration controls ===');
   {
-    const r = await post(BASE + '/api/options', { body: {} });
-    const roleplayKeys = Object.keys(r.roleplay || {});
-    if (roleplayKeys.includes('dialogue') && roleplayKeys.includes('descriptive')) {
+    const r = await get(BASE + '/api/options');
+    const roleplayArr = r.roleplay || [];
+    if (roleplayArr.includes('dialogue') && roleplayArr.includes('descriptive')) {
       console.log('PASS: All roleplay narration styles available (dialogue, descriptive)');
       totalPass++;
     } else {
@@ -151,10 +167,10 @@ async function main() {
   // Test 7: Language intensity controls
   console.log('\n=== Test 7: Language intensity controls ===');
   {
-    const r = await post(BASE + '/api/options', { body: {} });
-    const styleKeys = Object.keys(r.styles || {});
-    if (styleKeys.includes('clean') && styleKeys.includes('edgy') &&
-        styleKeys.includes('profane') && styleKeys.includes('direct')) {
+    const r = await get(BASE + '/api/options');
+    const styleArr = r.styles || [];
+    if (styleArr.includes('clean') && styleArr.includes('edgy') &&
+        styleArr.includes('profane') && styleArr.includes('direct')) {
       console.log('PASS: All language intensity levels available (clean, edgy, profane, very direct)');
       totalPass++;
     } else {
