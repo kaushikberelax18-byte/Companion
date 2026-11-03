@@ -9,6 +9,7 @@ const os = require('os');
 
 const { filterModels, classify, labelFor, isRouter, POLICY_NOTE } = require('./lib/models');
 const storage = require('./lib/storage');
+const characters = require('./lib/characters');
 
 const ROOT = __dirname;
 const PUB = path.join(ROOT, 'public');
@@ -883,11 +884,25 @@ async function loadConv(id) {
   if (!CULTURES_TABLE[c.persona.culture]) c.persona.culture = DEFAULT_SETTINGS.persona.culture;
   c.memory = c.memory || '';
   c.recent = c.recent || { openers: [], moves: [], endearments: [] };
-  // Character state for dynamic backstory continuity
-  c.characterState = c.characterState || generateInitialCharacterState(c.persona.age, c.persona.mode, c.persona.culture);
-  // Sanitize character state: remove temporary scene state that may have
-  // been polluted by a previous scene's refusals or stale context
-  c.characterState = sanitizeCharacterState(c.characterState);
+
+  // NEW: Structured character and scene state
+  if (!c.characters) {
+    // Migration: convert old characterState to new character registry
+    c.characters = migrateCharacterState(c.characterState, c.persona);
+    c.characterState = undefined; // Deprecated
+  }
+  if (!c.scene) {
+    c.scene = characters.createSceneState({
+      participants: Object.keys(c.characters).filter(id => c.characters[id].sceneRole === 'companion' || c.characters[id].sceneRole === 'npc')
+    });
+  }
+  if (!c.continuity) {
+    c.continuity = {
+      summary: '',
+      lastUpdatedAt: 0,
+      turnCount: 0
+    };
+  }
   return c;
 }
 
@@ -954,6 +969,59 @@ function generateInitialCharacterState(age, mode = 'open', culture = 'western') 
   };
 }
 
+/* Migrate old flat characterState to new structured character registry */
+function migrateCharacterState(oldState, persona) {
+  const characterRegistry = {};
+
+  // Create primary companion from persona
+  const primaryId = 'primary_' + Date.now().toString(36);
+  characterRegistry[primaryId] = characters.createCharacterRecord({
+    id: primaryId,
+    name: persona.name || 'Priya',
+    age: persona.age,
+    personality: persona.personality,
+    secondaryTrait: persona.secondaryTrait,
+    culture: persona.culture,
+    sceneRole: 'companion',
+    establishedFacts: oldState?.establishedFacts || {},
+    relationships: oldState?.relationships || {},
+    secrets: oldState?.secrets || [],
+    background: {
+      occupation: oldState?.establishedFacts?.occupation,
+      hobby: oldState?.establishedFacts?.hobby
+    }
+  });
+
+  // If there are user-defined premises, they belong to the primary character
+  if (oldState?.userDefinedPremises?.length) {
+    characterRegistry[primaryId].establishedFacts.premises = oldState.userDefinedPremises;
+  }
+
+  return characterRegistry;
+}
+
+/* Create initial character registry for new conversation */
+function createInitialCharacters(persona) {
+  const characterRegistry = {};
+
+  const primaryId = 'primary_' + Date.now().toString(36);
+  characterRegistry[primaryId] = characters.createCharacterRecord({
+    id: primaryId,
+    name: persona.name || 'Priya',
+    age: persona.age,
+    personality: persona.personality,
+    secondaryTrait: persona.secondaryTrait,
+    culture: persona.culture,
+    sceneRole: 'companion',
+    establishedFacts: {},
+    relationships: {},
+    secrets: [],
+    background: {}
+  });
+
+  return characterRegistry;
+}
+
 async function saveConv(c) {
   await storage.saveConv(c);
 }
@@ -969,42 +1037,72 @@ async function listConvs() {
 function buildSystem(settings, conv, move) {
   const p = conv.persona;
   const a = getAgeProfile(p.age);
-  const cs = conv.characterState || {
-    establishedFacts: {}, userDefinedPremises: [], sceneContext: '', revealedDetails: [], relationships: {}, secrets: []
-  };
 
-  // Build personality blend guidance
-  const primary = PERSONALITIES[p.personality] || '';
+  // NEW: Use structured character registry and scene state
+  const characterRegistry = conv.characters || {};
+  const scene = conv.scene || characters.createSceneState({ participants: Object.keys(characterRegistry) });
+  const continuity = conv.continuity || { summary: '', lastUpdatedAt: 0, turnCount: 0 };
+
+  // Determine active character (who should respond)
+  // Priority: scene.speaker (if user addressed someone) -> scene.addressee (if user is responding to someone)
+  // -> first participant with sceneRole 'companion' -> first participant
+  let activeCharacterId = null;
+  if (scene.addressee && characterRegistry[scene.addressee]) {
+    activeCharacterId = scene.addressee;
+  } else if (scene.speaker && characterRegistry[scene.speaker]) {
+    activeCharacterId = scene.speaker;
+  } else {
+    // Find primary companion
+    const companionIds = Object.entries(characterRegistry)
+      .filter(([, c]) => c.sceneRole === 'companion')
+      .map(([id]) => id);
+    if (companionIds.length) {
+      activeCharacterId = companionIds[0];
+    } else {
+      activeCharacterId = Object.keys(characterRegistry)[0];
+    }
+  }
+
+  const activeChar = characters[activeCharacterId] || { name: settings.name, personality: p.personality, age: p.age, culture: p.culture };
+  const activeAgeProfile = getAgeProfile(activeChar.age);
+
+  // Build personality blend guidance for active character
+  const primary = PERSONALITIES[activeChar.personality] || '';
   let secondaryGuidance = '';
-  if (p.secondaryTrait && PERSONALITIES[p.secondaryTrait]) {
-    const secondary = PERSONALITIES[p.secondaryTrait];
-    secondaryGuidance = `\n- Secondary trait: ${secondary}. This MODIFIES your primary temperament: blend ${p.secondaryTrait} into ${p.personality} naturally. The secondary trait colors how the primary expresses itself — it doesn't replace or contradict it.`;
+  if (activeChar.secondaryTrait && PERSONALITIES[activeChar.secondaryTrait]) {
+    const secondary = PERSONALITIES[activeChar.secondaryTrait];
+    secondaryGuidance = `\n- Secondary trait: ${secondary}. This MODIFIES your primary temperament: blend ${activeChar.secondaryTrait} into ${activeChar.personality} naturally. The secondary trait colors how the primary expresses itself — it doesn't replace or contradict it.`;
   }
 
   const lines = [];
-  lines.push(`You are ${settings.name}.`);
+  lines.push(`You are ${activeChar.name} (${activeChar.id}).`);
   lines.push('');
-  lines.push('## Who you are');
-  lines.push(`- Age: ${p.age}. ${a.life}`);
-  lines.push(`- Head: ${a.mind}`);
+  lines.push('## Who you are (Active Character)');
+  lines.push(`- Name: ${activeChar.name}`);
+  lines.push(`- Age: ${activeChar.age}. ${activeAgeProfile.life}`);
+  lines.push(`- Head: ${activeAgeProfile.mind}`);
   lines.push(`- Primary temperament: ${primary}`);
   if (secondaryGuidance) {
     lines.push(secondaryGuidance);
   }
-  if (p.personality === 'custom' && p.customPersonality && p.customPersonality.trim()) {
-    lines.push(`- Custom personality: ${p.customPersonality.trim()}`);
+  if (activeChar.personality === 'custom' && activeChar.customPersonality && activeChar.customPersonality.trim()) {
+    lines.push(`- Custom personality: ${activeChar.customPersonality.trim()}`);
   }
+  lines.push(`- Voice: ${activeAgeProfile.voice}`);
+  lines.push(`- Humour: ${activeAgeProfile.humor}`);
+  lines.push(`- Rhythm: ${activeAgeProfile.rhythm}`);
+  lines.push(`- References and worldview: ${activeAgeProfile.refs}`);
 
-  // Culture-specific identity and background
-  if (p.culture === 'indian') {
+  // Culture-specific identity and background for active character
+  if (activeChar.culture === 'indian') {
     const culture = CULTURES.indian;
-    const facts = cs.establishedFacts || {};
-    const firstName = facts.firstName || '';
-    const lastName = facts.lastName || '';
+    const facts = activeChar.background || {};
+    const firstName = facts.firstName || activeChar.name.split(' ')[0];
+    const lastName = facts.lastName || activeChar.name.split(' ').slice(1).join(' ') || '';
     if (facts.region) {
       lines.push(`- Cultural background: ${facts.region} Indian woman named ${firstName} ${lastName}, from ${facts.hometown}.`);
     } else {
-      lines.push(`- Cultural background: Indian woman named ${firstName} ${lastName}.`);
+      lines.push(`- Cultural background: Indian woman named ${activeChar.name}.`);
     }
     lines.push(`- Speaks natural conversational English with occasional Indian expressions (yaar, arre, bilkul, sahi hai, na, hai na, bohot, thik hai) and code-switching where natural. Hindi, Hinglish, English flow naturally.`);
     lines.push(`- Does not default to stereotypes. Not defined by religion, conservatism, marriage, shyness, or submission unless specifically established. Her background informs her life without defining her entire personality.`);
@@ -1017,15 +1115,11 @@ function buildSystem(settings, conv, move) {
   }
   lines.push('');
   lines.push('## How you write');
-  lines.push(`- Voice: ${a.voice}`);
-  lines.push(`- Humour: ${a.humor}`);
-  lines.push(`- Rhythm: ${a.rhythm}`);
-  lines.push(`- References and worldview: ${a.refs}`);
   lines.push(`- Reply size: ${LENGTHS[p.length]}`);
   lines.push(`- Language: ${STYLES[p.style]}`);
   lines.push('');
   lines.push('## How you flirt and how you hold a conversation');
-  lines.push(`- Heat: ${a.heat}`);
+  lines.push(`- Heat: ${activeAgeProfile.heat}`);
   lines.push(`- Mode: ${MODES[p.mode]}`);
   lines.push(`- Initiative: ${INITIATIVES[p.initiative]}`);
   lines.push(`- Flirting intensity: ${FLIRT_LEVELS[p.flirting]}`);
@@ -1049,19 +1143,96 @@ function buildSystem(settings, conv, move) {
 
   if (move) { lines.push(''); lines.push('## This turn'); lines.push(`Lean into: ${move}. Do not announce it, just do it.`); }
 
-  if (conv.memory) { lines.push(''); lines.push('## What you already know (continuity, never contradict it)'); lines.push(conv.memory); }
+  // NEW: Character-aware continuity summary
+  if (continuity.summary) {
+    lines.push('');
+    lines.push('## Continuity Memory (Character-Aware)');
+    lines.push(continuity.summary);
+  }
 
-  // Dynamic character backstory state
+  // NEW: Full character registry for reference
   lines.push('');
-  lines.push('## Character Identity and Backstory State');
-  lines.push('Use this to maintain consistency and depth. Reveal secrets only when natural.');
-  lines.push('BACKGROUND RELATIONSHIPS (partners, spouses, children from backstory) ARE NOT CONSTRAINTS on the current scene. They exist as character depth only. The current scene dynamic takes absolute precedence.');
-  if (Object.keys(cs.establishedFacts).length) lines.push('- Established facts: ' + JSON.stringify(cs.establishedFacts));
-  if (cs.userDefinedPremises.length) lines.push('- User-defined fictional premises: ' + cs.userDefinedPremises.join('; '));
-  if (cs.sceneContext) lines.push('- Current scene context: ' + cs.sceneContext);
-  if (cs.revealedDetails.length) lines.push('- Details already revealed: ' + cs.revealedDetails.join(', '));
-  if (Object.keys(cs.relationships).length) lines.push('- Background relationships (not scene constraints): ' + JSON.stringify(cs.relationships));
-  if (cs.secrets.length) lines.push('- Secrets (reveal only when natural): ' + cs.secrets.join('; '));
+  lines.push('## Character Registry (All Known Characters)');
+  for (const [charId, char] of Object.entries(characterRegistry)) {
+    const inScene = scene.participants.includes(charId);
+    const status = inScene ? '[PRESENT]' : '[ABSENT]';
+    lines.push(`\n### ${char.name} (${charId}) ${status}`);
+    lines.push(`- Age: ${char.age}, Personality: ${char.personality}${char.secondaryTrait ? ` + ${char.secondaryTrait}` : ''}`);
+    if (char.culture && char.culture !== 'western') lines.push(`- Culture: ${char.culture}`);
+    if (char.background && Object.keys(char.background).length) {
+      const bg = [];
+      if (char.background.occupation) bg.push(`works as ${char.background.occupation}`);
+      if (char.background.hometown) bg.push(`from ${char.background.hometown}`);
+      if (bg.length) lines.push(`- Background: ${bg.join(', ')}`);
+    }
+    if (char.establishedFacts && Object.keys(char.establishedFacts).length) {
+      for (const [key, value] of Object.entries(char.establishedFacts)) {
+        lines.push(`- ${key}: ${value}`);
+      }
+    }
+    if (char.secrets && char.secrets.length) {
+      lines.push(`- Secrets (reveal naturally): ${char.secrets.slice(0, 3).join('; ')}`);
+    }
+    if (char.relationships && Object.keys(char.relationships).length) {
+      for (const [otherId, rel] of Object.entries(char.relationships)) {
+        const otherChar = characters[otherId];
+        const otherName = otherChar ? otherChar.name : otherId;
+        lines.push(`- Relationship with ${otherName}: ${rel}`);
+      }
+    }
+  }
+
+  // NEW: Scene state
+  lines.push('');
+  lines.push('## Current Scene');
+  lines.push(`Location: ${scene.location || 'unspecified'}`);
+  const presentChars = scene.participants
+    .map(id => characterRegistry[id] ? characterRegistry[id].name : id)
+    .join(', ');
+  lines.push(`Present: ${presentChars || 'none'}`);
+  if (scene.speaker) {
+    const speakerChar = characterRegistry[scene.speaker];
+    lines.push(`Last speaker: ${speakerChar ? speakerChar.name : scene.speaker}`);
+  }
+  if (scene.addressee) {
+    const addresseeChar = characterRegistry[scene.addressee];
+    lines.push(`Addressed to: ${addresseeChar ? addresseeChar.name : scene.addressee}`);
+  }
+  if (scene.context) {
+    lines.push(`Context: ${scene.context}`);
+  }
+
+  // NEW: Active conversation threads
+  if (scene.activeThreads && scene.activeThreads.length) {
+    lines.push('\n## Active Threads');
+    for (const thread of scene.activeThreads) {
+      const participants = thread.participants
+        .map(id => characterRegistry[id] ? characterRegistry[id].name : id)
+        .join(', ');
+      lines.push(`- ${thread.topic} (${participants})`);
+    }
+  }
+
+  // NEW: Unresolved actions
+  const pendingActions = scene.unresolvedActions?.filter(a => a.status === 'pending') || [];
+  if (pendingActions.length) {
+    lines.push('\n## Unresolved Actions / Promises');
+    for (const action of pendingActions) {
+      const whoStr = action.who ? (characterRegistry[action.who] ? characterRegistry[action.who].name : action.who) : 'someone';
+      lines.push(`- ${action.description} (${whoStr})`);
+    }
+  }
+
+  // NEW: Recent dialogue with speaker attribution
+  const dialogueContext = characters.buildDialogueContext({
+    characters: characterRegistry,
+    messages: conv.messages,
+    maxMessages: 15
+  });
+  if (dialogueContext) {
+    lines.push('\n## Recent Dialogue (with attribution)');
+    lines.push(dialogueContext);
+  }
 
   const r = conv.recent;
   if (r.openers.length || r.endearments.length) {
@@ -1185,14 +1356,6 @@ const REFUSAL_PREFIX_PATTERNS = [
   /^(?:this (?:conversation|scene|roleplay) (?:has gone too far|cannot continue|is over))\b/i,
 ];
 
-// Patterns that indicate the start of a refusal within a sentence (for multi-sentence check)
-// These are more specific to provider refusals with policy/safety context
-const REFUSAL_PREFIX_PATTERNS = [
-  /^(?:i cannot|i can't|i am unable|i'm unable|i won't|i will not|i refuse|i must decline)\b.*\b(?:policy|guidelines|safety|content.policy|harmful|violates|inappropriate)\b/i,
-  /^(?:i(?: am|'m) not (?:able|willing) to)\b.*\b(?:policy|guidelines|safety|content.policy|harmful|violates|inappropriate)\b/i,
-  /^(?:i must (?:decline|refuse|stop|end this))\b.*\b(?:policy|guidelines|safety|content.policy|harmful|violates|inappropriate)\b/i,
-  /^(?:this (?:conversation|scene|roleplay) (?:has gone too far|cannot continue|is over))\b/i,
-];
 
 function isRefusal(text) {
   if (!text) return false;
@@ -1492,18 +1655,30 @@ async function compress(conv, settings) {
   if (clean.length < 10) return { skipped: 'too short to bother after removing refusals' };
   const keep = clean.slice(-8);
   const drop = clean.slice(0, -8);
-  const transcript = drop.map(m => `${m.role === 'user' ? 'THEM' : settings.name.toUpperCase()}: ${m.content}`).join('\n');
-  const sys = 'You compress a roleplay/companionship transcript into a continuity brief for the same characters. Output plain bullets, 220 words max. Preserve: real names, ages, relationships, locations, established facts, the current scenario and where it stands, unresolved threads, promises made, running jokes, how they speak to each other, and the emotional temperature. Drop flavour and small talk. Never invent anything not in the transcript.';
 
+  // NEW: Use character-aware summarization
+  const transcript = drop.map(m => `${m.role === 'user' ? 'THEM' : settings.name.toUpperCase()}: ${m.content}`).join('\n');
+  const sys = 'You compress a roleplay/companionship transcript into a CHARACTER-AWARE continuity brief. Output plain bullets, 220 words max. CRITICAL: Every action, dialogue line, and fact MUST be attributed to a specific character by NAME. Never use ambiguous pronouns (she/he/they) when identity matters. Format: "CharacterName: did/said X". Preserve: real names, ages, relationships, locations, established facts, the current scenario and where it stands, unresolved threads, promises made, running jokes, how they speak to each other, and the emotional temperature. Drop flavour and small talk. Never invent anything not in the transcript.';
+
+  const existingSummary = conv.continuity?.summary || conv.memory || '';
   const r = await apiCall(settings, {
     model: settings.model, max_tokens: 700, temperature: 0.3, system: sys,
-    messages: [{ role: 'user', content: (conv.memory ? 'Existing brief:\n' + conv.memory + '\n\nNew transcript to fold in:\n' : 'Transcript:\n') + transcript }]
+    messages: [{ role: 'user', content: (existingSummary ? 'Existing brief:\n' + existingSummary + '\n\nNew transcript to fold in:\n' : 'Transcript:\n') + transcript }]
   });
-  conv.memory = [conv.memory, tidy(r.reply, 'detailed')].filter(Boolean).join('\n').slice(-4000);
+  const newSummary = characters.buildCharacterAwareSummary({
+    characters: conv.characters,
+    scene: conv.scene,
+    recentDialogue: drop,
+    existingMemory: tidy(r.reply, 'detailed')
+  });
+
+  conv.continuity = conv.continuity || { summary: '', lastUpdatedAt: 0, turnCount: 0 };
+  conv.continuity.summary = newSummary.slice(-4000);
+  conv.continuity.lastUpdatedAt = Date.now();
   conv.messages = keep;
   conv.compactedAt = Date.now();
-  saveConv(conv);
-  return { dropped: drop.length, memoryChars: conv.memory.length };
+  await saveConv(conv);
+  return { dropped: drop.length, memoryChars: conv.continuity.summary.length };
 }
 
 /* ------------------------------------------------------------------ *
@@ -1545,6 +1720,23 @@ async function sendMessage(convId, userText, settingsOverride) {
     }
 
     conv.messages.push({ role: 'user', content: text, at: Date.now() });
+
+    // NEW: Detect who the user is addressing in their message
+    // This helps determine which character should respond
+    if (conv.characters && Object.keys(conv.characters).length > 1) {
+      // Check if user mentioned a character name at the start
+      const firstWords = text.trim().split(/\s+/).slice(0, 3).join(' ').toLowerCase();
+      for (const [charId, char] of Object.entries(conv.characters)) {
+        const nameLower = char.name.toLowerCase();
+        const aliasLower = char.aliases.map(a => a.toLowerCase());
+        if (firstWords.startsWith(nameLower) || aliasLower.some(a => firstWords.startsWith(a))) {
+          // User addressed this character
+          conv.scene = characters.setSceneSpeaker(conv.scene, null, charId);
+          break;
+        }
+      }
+    }
+
     const move = pickMove(conv);
     const system = buildSystem(settings, conv, move);
     let { msgs, input, budget, over } = await assembleMessages(conv, system);
@@ -1634,11 +1826,57 @@ async function sendMessage(convId, userText, settingsOverride) {
   }
 
   if (!reply) reply = '...';
+
   conv.messages.push({ role: 'assistant', content: reply, at: Date.now() });
+
+  // NEW: Parse response for speaker attribution and update scene state
+  const parsed = characters.parseDialogueLine(reply.split('\n')[0]);
+  let speakerId = null;
+
+  if (parsed.attributed && parsed.speaker) {
+    // Find matching character
+    const charMatch = Object.values(conv.characters || {}).find(
+      c => c.name.toLowerCase() === parsed.speaker.toLowerCase() ||
+           c.aliases.some(a => a.toLowerCase() === parsed.speaker.toLowerCase())
+    );
+    if (charMatch) {
+      speakerId = charMatch.id;
+    }
+  } else {
+    // No explicit attribution - use the current addressee if there is one,
+    // meaning the model responded to the user's address
+    if (conv.scene.addressee) {
+      speakerId = conv.scene.addressee;
+    }
+  }
+
+  if (speakerId && conv.characters[speakerId]) {
+    // Update scene: this character is now the speaker
+    conv.scene = characters.setSceneSpeaker(conv.scene, speakerId);
+    // Update character's last spoke time
+    conv.characters[speakerId].lastSpokeAt = Date.now();
+    conv.characters[speakerId].dialogueTurnCount = (conv.characters[speakerId].dialogueTurnCount || 0) + 1;
+  }
   conv.recent.openers = [...(conv.recent.openers || []), openerKey(reply)].slice(-12);
   noteEndearments(conv, reply);
   conv.title = conv.title || reply.slice(0, 40);
   conv.updatedAt = Date.now();
+
+  // NEW: Update continuity summary periodically
+  if (conv.continuity) {
+    conv.continuity.turnCount = (conv.continuity.turnCount || 0) + 1;
+    // Update summary every 6 turns
+    if (conv.continuity.turnCount % 6 === 0) {
+      conv.continuity.summary = characters.buildCharacterAwareSummary({
+        characters: conv.characters,
+        scene: conv.scene,
+        recentDialogue: conv.messages.slice(-12),
+        existingMemory: conv.continuity.summary
+      });
+      conv.continuity.lastUpdatedAt = Date.now();
+    }
+  }
+
   await saveConv(conv);
 
   const requested = settings.model;
@@ -1661,6 +1899,17 @@ async function openingLine(convId) {
   const system = buildSystem(settings, conv, 'open the conversation yourself, the way you actually would, with something specific');
   const out = await apiCall(settings, { model: settings.model, max_tokens: 300, temperature: 1, system, messages: [{ role: 'user', content: '(the conversation just opened)' }] });
   const reply = tidy(out.reply, conv.persona.length) || 'hey. what are you doing right now.';
+
+  // NEW: Update scene with opening speaker
+  const activeCharId = Object.keys(conv.characters || {})[0];
+  if (activeCharId) {
+    conv.scene = characters.setSceneSpeaker(conv.scene, activeCharId);
+    if (conv.characters[activeCharId]) {
+      conv.characters[activeCharId].lastSpokeAt = Date.now();
+      conv.characters[activeCharId].dialogueTurnCount = 1;
+    }
+  }
+
   conv.messages.push({ role: 'assistant', content: reply, at: Date.now() });
   conv.recent.openers = [...conv.recent.openers, openerKey(reply)].slice(-12);
   noteEndearments(conv, reply);
@@ -1807,9 +2056,130 @@ const server = http.createServer(async (req, res) => {
       const s = await loadSettings();
       const persona = { ...s.persona, ...(body.persona || {}) };
       persona.age = clampAge(persona.age);
-      const conv = { id: newId(), title: '', createdAt: Date.now(), updatedAt: Date.now(), persona, messages: [], memory: '', recent: { openers: [], moves: [], endearments: [] }, characterState: generateInitialCharacterState(persona.age, persona.mode, persona.culture) };
+      const initialCharacters = createInitialCharacters(persona);
+      const conv = {
+        id: newId(),
+        title: '',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        persona,
+        messages: [],
+        memory: '',
+        recent: { openers: [], moves: [], endearments: [] },
+        characters: initialCharacters,
+        scene: characters.createSceneState({
+          participants: Object.keys(initialCharacters)
+        }),
+        continuity: {
+          summary: '',
+          lastUpdatedAt: 0,
+          turnCount: 0
+        }
+      };
       await saveConv(conv);
       return send(res, 200, { conv });
+    }
+
+    /* NEW: Character management endpoints (must come before general conversation pattern) */
+    // Add a new character to the conversation
+    if (p.match(/^\/api\/conversations\/([\w-]+)\/characters$/) && req.method === 'POST') {
+      const mConv = p.match(/^\/api\/conversations\/([\w-]+)\/characters$/);
+      const conv = await loadConv(mConv[1]);
+      if (!conv) return send(res, 404, { error: { kind: 'no_conv', message: 'Conversation not found.' } });
+      const body = await readBody(req);
+      const newChar = characters.createCharacterRecord({
+        name: body.name || 'New Character',
+        age: clampAge(body.age),
+        personality: body.personality || 'playful',
+        secondaryTrait: body.secondaryTrait || '',
+        culture: body.culture || 'western',
+        sceneRole: body.sceneRole || 'npc',
+        background: body.background || {},
+        establishedFacts: body.establishedFacts || {},
+        relationships: body.relationships || {},
+        secrets: body.secrets || [],
+        aliases: body.aliases || []
+      });
+      conv.characters = conv.characters || {};
+      conv.characters[newChar.id] = newChar;
+      // Add to scene if requested
+      if (body.joinScene !== false) {
+        conv.scene = characters.updateSceneParticipants(conv.scene, newChar.id, { enter: true });
+      }
+      conv.updatedAt = Date.now();
+      await saveConv(conv);
+      return send(res, 200, { character: newChar, conv });
+    }
+
+    // Update a specific character
+    if (p.match(/^\/api\/conversations\/([\w-]+)\/characters\/([\w-]+)$/) && req.method === 'PATCH') {
+      const match = p.match(/^\/api\/conversations\/([\w-]+)\/characters\/([\w-]+)$/);
+      const conv = await loadConv(match[1]);
+      if (!conv) return send(res, 404, { error: { kind: 'no_conv', message: 'Conversation not found.' } });
+      const charId = match[2];
+      if (!conv.characters[charId]) return send(res, 404, { error: { kind: 'no_char', message: 'Character not found.' } });
+      const body = await readBody(req);
+      conv.characters[charId] = characters.updateCharacterRecord(conv.characters[charId], body);
+      conv.updatedAt = Date.now();
+      await saveConv(conv);
+      return send(res, 200, { character: conv.characters[charId], conv });
+    }
+
+    // Remove a character
+    if (p.match(/^\/api\/conversations\/([\w-]+)\/characters\/([\w-]+)$/) && req.method === 'DELETE') {
+      const match = p.match(/^\/api\/conversations\/([\w-]+)\/characters\/([\w-]+)$/);
+      const conv = await loadConv(match[1]);
+      if (!conv) return send(res, 404, { error: { kind: 'no_conv', message: 'Conversation not found.' } });
+      const charId = match[2];
+      if (!conv.characters[charId]) return send(res, 404, { error: { kind: 'no_char', message: 'Character not found.' } });
+      // Don't allow removing the last companion
+      const companionCount = Object.values(conv.characters).filter(c => c.sceneRole === 'companion').length;
+      if (conv.characters[charId].sceneRole === 'companion' && companionCount <= 1) {
+        return send(res, 400, { error: { kind: 'last_companion', message: 'Cannot remove the last companion character.' } });
+      }
+      delete conv.characters[charId];
+      // Remove from scene
+      conv.scene = characters.updateSceneParticipants(conv.scene, charId, { exit: true });
+      conv.updatedAt = Date.now();
+      await saveConv(conv);
+      return send(res, 200, { ok: true, conv });
+    }
+
+    // Get scene state
+    if (p.match(/^\/api\/conversations\/([\w-]+)\/scene$/) && req.method === 'GET') {
+      const mConv = p.match(/^\/api\/conversations\/([\w-]+)\/scene$/);
+      const conv = await loadConv(mConv[1]);
+      if (!conv) return send(res, 404, { error: { kind: 'no_conv', message: 'Conversation not found.' } });
+      return send(res, 200, { scene: conv.scene, characters: conv.characters });
+    }
+
+    // Update scene state
+    if (p.match(/^\/api\/conversations\/([\w-]+)\/scene$/) && req.method === 'PATCH') {
+      const mConv = p.match(/^\/api\/conversations\/([\w-]+)\/scene$/);
+      const conv = await loadConv(mConv[1]);
+      if (!conv) return send(res, 404, { error: { kind: 'no_conv', message: 'Conversation not found.' } });
+      const body = await readBody(req);
+      if (body.participants) {
+        conv.scene = characters.updateSceneParticipants(conv.scene, body.participants, body);
+      }
+      if (body.speaker) {
+        conv.scene = characters.setSceneSpeaker(conv.scene, body.speaker, body.addressee);
+      }
+      if (body.location) {
+        conv.scene.location = body.location;
+      }
+      if (body.context) {
+        conv.scene.context = body.context;
+      }
+      if (body.addAction) {
+        conv.scene = characters.addSceneAction(conv.scene, body.addAction);
+      }
+      if (body.resolveAction) {
+        conv.scene = characters.resolveSceneAction(conv.scene, body.resolveAction);
+      }
+      conv.updatedAt = Date.now();
+      await saveConv(conv);
+      return send(res, 200, { scene: conv.scene, conv });
     }
 
     const mConv = p.match(/^\/api\/conversations\/([\w-]+)(?:\/(.*))?$/);
@@ -1830,8 +2200,23 @@ const server = http.createServer(async (req, res) => {
             conv.model = body.persona.model.trim();
           }
         }
-        // Support for character state updates
-        if (body.characterState) { conv.characterState = { ...conv.characterState, ...body.characterState }; }
+        // Support for character updates
+        if (body.characters) {
+          for (const [charId, updates] of Object.entries(body.characters)) {
+            if (conv.characters[charId]) {
+              conv.characters[charId] = characters.updateCharacterRecord(conv.characters[charId], updates);
+            }
+          }
+        }
+        // Support for scene updates
+        if (body.scene) {
+          if (body.scene.participants) {
+            conv.scene = characters.updateSceneParticipants(conv.scene, body.scene.participants, body.scene);
+          }
+          if (body.scene.speaker) {
+            conv.scene = characters.setSceneSpeaker(conv.scene, body.scene.speaker, body.scene.addressee);
+          }
+        }
         conv.updatedAt = Date.now();
         await saveConv(conv);
         return send(res, 200, { conv });
@@ -1846,7 +2231,9 @@ const server = http.createServer(async (req, res) => {
           conv.messages = [];
         }
         // Reset scene-specific state but keep character identity
-        conv.characterState = sanitizeCharacterState(conv.characterState);
+        conv.scene = characters.createSceneState({
+          participants: conv.scene?.participants || Object.keys(conv.characters || {})
+        });
         conv.recent = { openers: [], moves: [], endearments: [] };
         conv.updatedAt = Date.now();
         await saveConv(conv);
@@ -1892,6 +2279,7 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
+    
     return send(res, 404, { error: { kind: 'not_found', message: 'No such route: ' + req.method + ' ' + p } });
   } catch (e) {
     if (e instanceof ApiError) return send(res, e.status >= 400 ? e.status : 500, { error: { kind: e.kind, message: e.message } });
