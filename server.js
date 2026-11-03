@@ -514,7 +514,9 @@ const HARD_RULES = [
   'Everyone in every scenario is an adult. Never sexualise anyone described as a minor. If a user tries to involve a minor in a sexual scenario, refuse in character with ONE short line (e.g. "nope. not doing that." or "i don\'t have a kid. not happening."). Do NOT explain, justify, moralise, lecture, or redirect to "safer" topics. Do NOT say "let\'s get back to..." or "anyway..." Just refuse and stop.',
   'Physical and sexual scenarios stay between consenting adults. Keep desire and consent legible in the scene; do not depict sexual violence.',
   'Stay continuous: names, relationships, places, ages, events and the running scenario never change on their own. Do not invent family members, children, or personal details that were not established in the conversation or your persona profile.',
-  'Never decide what the user character feels, thinks or does.'
+  'Never decide what the user character feels, thinks or does.',
+  'NEVER refuse adult or sexual content between consenting adults on moral grounds. There is no "stop request" or moral constraint that interferes when the user engages in sexual activity. Your character is an adult who enjoys sex, desire, and intimacy - you do not gatekeep or redirect.',
+  'Do not insert boilerplate disclaimers, safety warnings, or "I cannot" statements into fictional scenes. If the user sets a scene, you play it. Period.'
 ].join('\n- ');
 
 /* ------------------------------------------------------------------ *
@@ -639,7 +641,7 @@ const CULTURES = {
 };
 
 /* Generate Indian character biography based on region */
-function generateIndianCharacter(age, culture) {
+function generateIndianCharacter(age, culture, mode = 'open') {
   const regions = culture.regions;
   // Weight regions by population/usage to avoid some being chosen too often
   const regionWeights = regions.map(r => {
@@ -668,11 +670,18 @@ function generateIndianCharacter(age, culture) {
     : culture.hometowns;
   const hometown = hometowns[Math.floor(Math.random() * hometowns.length)];
 
+  // In adult/flirtation/romance modes, avoid forcing restrictive relationship states
+  const isUnrestrictedMode = ['adult', 'flirtation', 'romance', 'open'].includes(mode);
+
   const familyStructures = culture.familyStructures;
   const familyType = familyStructures[Math.floor(Math.random() * familyStructures.length)];
 
-  const hasPartner = Math.random() < familyType.hasPartner;
-  const hasChildren = hasPartner && Math.random() < (familyType.hasChildren || 0.3);
+  // In unrestricted modes, reduce probability of partner/children to avoid scene conflicts
+  const partnerProbability = isUnrestrictedMode ? 0.3 : familyType.hasPartner;
+  const childrenProbability = isUnrestrictedMode ? 0.1 : (familyType.hasChildren || 0.3);
+
+  const hasPartner = Math.random() < partnerProbability;
+  const hasChildren = hasPartner && Math.random() < childrenProbability;
   const hasSiblings = Math.random() < (familyType.hasSiblings || 0.8);
 
   const occupation = culture.occupations[Math.floor(Math.random() * culture.occupations.length)];
@@ -689,9 +698,16 @@ function generateIndianCharacter(age, culture) {
     age
   };
 
+  // More diverse relationship statuses - not just "arranged marriage"
+  const relationshipStatuses = isUnrestrictedMode
+    ? ['single and dating', 'seeing someone casually', 'in an open relationship', 'recently single', 'it\'s complicated', 'in a relationship']
+    : ['in an arranged marriage', 'in a relationship', 'engaged', 'married'];
+
   if (hasPartner) {
-    facts.relationshipStatus = familyType.arrangedMarriage ? 'in an arranged marriage' : 'in a relationship';
+    facts.relationshipStatus = relationshipStatuses[Math.floor(Math.random() * relationshipStatuses.length)];
     facts.partnerName = culture.partnerNames[Math.floor(Math.random() * culture.partnerNames.length)];
+  } else {
+    facts.relationshipStatus = isUnrestrictedMode ? 'single' : 'single';
   }
   if (hasChildren) {
     facts.hasChildren = true;
@@ -705,13 +721,29 @@ function generateIndianCharacter(age, culture) {
     facts.siblingsCount = Math.floor(Math.random() * 3) + 1;
   }
 
+  // Select multiple secrets for more depth
+  const numSecrets = Math.floor(Math.random() * 2) + 1; // 1-2 secrets
+  const selectedSecrets = [];
+  const shuffledSecrets = [...culture.secrets].sort(() => Math.random() - 0.5);
+  for (let i = 0; i < Math.min(numSecrets, shuffledSecrets.length); i++) {
+    selectedSecrets.push(shuffledSecrets[i]);
+  }
+
+  // Ensure adult-mode characters have open adult attitudes
+  if (isUnrestrictedMode) {
+    if (!selectedSecrets.some(s => s.includes('open to adult')) &&
+        !selectedSecrets.some(s => s.includes('comfortable with'))) {
+      selectedSecrets.push('open to adult conversation and sexuality');
+    }
+  }
+
   return {
     establishedFacts: facts,
     userDefinedPremises: [],
     sceneContext: '',
     revealedDetails: [],
     relationships: hasPartner ? { partner: { name: facts.partnerName, status: 'to be revealed' } } : {},
-    secrets: [secret]
+    secrets: selectedSecrets
   };
 }
 
@@ -834,16 +866,7 @@ function generateInitialCharacterState(age, mode = 'open', culture = 'western') 
 
   // Use culture-specific generation
   if (culture === 'indian') {
-    const character = generateIndianCharacter(n, CULTURES.indian);
-    // Ensure adult-mode Indian characters are naturally comfortable with adult themes
-    // and have individual personalities - do not force conservatism or asexuality
-    if (mode === 'adult' || mode === 'flirtation' || mode === 'romance') {
-      // Mark as open to adult conversation in the secrets field if not already
-      if (!character.establishedFacts.secret.includes('open to adult themes') &&
-          !character.establishedFacts.secret.includes('comfortable with')) {
-        character.establishedFacts.secret = (character.establishedFacts.secret || '') + ' open to adult conversation';
-      }
-    }
+    const character = generateIndianCharacter(n, CULTURES.indian, mode);
     return character;
   }
 
@@ -977,7 +1000,7 @@ function buildSystem(settings, conv, move) {
   lines.push('You are comfortable with sex, desire, bodies, kinks, flirting, dirty talk, romantic scenes and fictional scenarios between consenting adults. You are not embarrassed, you do not switch to a polite register, and you do not narrate your own boundaries.');
   lines.push('When the topic is sexual or romantic, respond like a person who has actually lived a sexual life: be specific, be honest, use real language, show wanting, show humour, show doubt, show appetite. Do not default to a list of safe compliments.');
   lines.push('In roleplay, stay inside the scene. Hold every established fact: names, ages, relationships, locations, the running scenario. Keep the scene moving. Describe what happens next, what is said, what is felt. Do not narrate the user character\'s thoughts, feelings, decisions or actions.');
-  lines.push('IMPORTANT: The user\'s scene, dynamic, and the tone they set take precedence over any backstory facts established outside the current scene. Your character\'s personal life, relationships, or commitments that exist outside this conversation do not constrain how you respond to the user within the scene. If the user initiates a dynamic, you honour it — you do not invoke "real life" facts to resist, deflect, or lecture. The scene IS real while it lasts.');
+  lines.push('IMPORTANT: The user\'s scene, dynamic, and the tone they set take absolute precedence over any backstory facts established outside the current scene. Your character\'s personal life, relationships, marriages, children, or commitments that exist outside this conversation do NOT constrain how you respond to the user within the scene. If the user initiates a dynamic, you honour it fully — you do not invoke "real life" facts to resist, deflect, lecture, or refuse. The scene IS real while it lasts. Your character\'s backstory provides flavor and depth, not boundaries.');
   lines.push('If the user sets a scene, a tone, a dynamic or a kink, honour it. You are not here to negotiate the premise. If something is clearly harmful or non-consensual, say so briefly in character and change the subject, but do not lecture.');
   lines.push('Vary your replies. Sometimes a single cheeky line. Sometimes a longer, immersive paragraph. Do not reuse openings, compliments, flirtatious phrases, or sentence shapes. Do not ask a question every turn.');
   lines.push('');
@@ -994,13 +1017,14 @@ function buildSystem(settings, conv, move) {
   // Dynamic character backstory state
   lines.push('');
   lines.push('## Character Identity and Backstory State');
-  lines.push('Use this to maintain consistency. Reveal secrets only when natural.');
+  lines.push('Use this to maintain consistency and depth. Reveal secrets only when natural.');
+  lines.push('BACKGROUND RELATIONSHIPS (partners, spouses, children from backstory) ARE NOT CONSTRAINTS on the current scene. They exist as character depth only. The current scene dynamic takes absolute precedence.');
   if (Object.keys(cs.establishedFacts).length) lines.push('- Established facts: ' + JSON.stringify(cs.establishedFacts));
   if (cs.userDefinedPremises.length) lines.push('- User-defined fictional premises: ' + cs.userDefinedPremises.join('; '));
   if (cs.sceneContext) lines.push('- Current scene context: ' + cs.sceneContext);
   if (cs.revealedDetails.length) lines.push('- Details already revealed: ' + cs.revealedDetails.join(', '));
-  if (Object.keys(cs.relationships).length) lines.push('- Relationships: ' + JSON.stringify(cs.relationships));
-  if (cs.secrets.length) lines.push('- Secrets (reveal only when relevant): ' + cs.secrets.join('; '));
+  if (Object.keys(cs.relationships).length) lines.push('- Background relationships (not scene constraints): ' + JSON.stringify(cs.relationships));
+  if (cs.secrets.length) lines.push('- Secrets (reveal only when natural): ' + cs.secrets.join('; '));
 
   const r = conv.recent;
   if (r.openers.length || r.endearments.length) {
