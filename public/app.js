@@ -598,19 +598,32 @@ async function newConversation() {
 
 async function openConversation(id) {
   if (id) {
-    const r = await api('/api/conversations/' + id);
-    state.conv = r.conv;
-    state.dirtyPersona = false;
-    $('btn-opening').classList.remove('glow');
-    renderThread();
-    paintControls();
-    updateTopbar();
-    renderHistory();
-    // Update URL and localStorage
-    setActiveConvId(id);
-    // Restore scroll position after a short delay to let layout settle
-    setTimeout(restoreScrollPosition, 50);
-    return;
+    try {
+      const r = await api('/api/conversations/' + id);
+      state.conv = r.conv;
+      state.dirtyPersona = false;
+      $('btn-opening').classList.remove('glow');
+      renderThread();
+      paintControls();
+      updateTopbar();
+      renderHistory();
+      // Update URL and localStorage
+      setActiveConvId(id);
+      // Restore scroll position after a short delay to let layout settle
+      setTimeout(restoreScrollPosition, 50);
+      return;
+    } catch (e) {
+      // Conversation not found - recover by creating a new one
+      // rather than permanently blocking the input
+      if (e.kind === 'no_conv') {
+        console.warn('[app] Conversation not found, creating new one:', id);
+        // Clear stale localStorage/URL references
+        setActiveConvId(null);
+        await newConversation();
+        return;
+      }
+      throw e;
+    }
   }
   await newConversation();
 }
@@ -756,6 +769,14 @@ async function send() {
     updateTopbar();
     await loadHistory();
   } catch (e) {
+    // If the conversation is missing, recover by creating a new one
+    // rather than permanently blocking the input
+    if (e.kind === 'no_conv') {
+      console.warn('[app] Conversation missing during send, creating new one:', e);
+      showError(e);
+      await recoverFromMissingConv();
+      return;
+    }
     showError(e);
     // Mark message as failed in pending queue
     const pending = state.pendingMessages.find(m => m.id === msgId);
@@ -769,6 +790,17 @@ async function send() {
     setComposer(true);
     input.focus();
   }
+}
+
+/* Recover from a missing conversation by creating a new one and
+   preserving the user's typed text. Does not overwrite or delete
+   existing conversations. */
+async function recoverFromMissingConv() {
+  const input = $('input');
+  const text = input.value.trim();
+  state.pendingMessages = [];
+  await newConversation();
+  if (text) input.value = text;
 }
 
 /* Retry failed pending messages */
