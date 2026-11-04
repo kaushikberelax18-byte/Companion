@@ -1481,7 +1481,22 @@ async function apiCall(settings, body) {
       let json = null;
       try { json = JSON.parse(text); } catch {}
       if (!json || !Array.isArray(json.content)) throw new ApiError(200, 'malformed', 'The API returned an unreadable response.');
-      const reply = json.content.filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
+      // Filter out non‑chat text blocks (e.g., reasoning or internal thinking) if they are annotated.
+      const reply = json.content
+        .filter(b => {
+          if (b.type !== 'text') return false;
+          // Some providers may embed reasoning in a text block with metadata indicating its purpose.
+          if (b.metadata && typeof b.metadata === 'object') {
+            const metaStr = JSON.stringify(b.metadata).toLowerCase();
+            if (metaStr.includes('reason') || metaStr.includes('thinking') || metaStr.includes('analysis') || metaStr.includes('internal')) {
+              return false;
+            }
+          }
+          return true;
+        })
+        .map(b => b.text)
+        .join('\n')
+        .trim();
       return { reply, served: json.model || '', stopReason: json.stop_reason, usage: json.usage || {} };
     }
 
@@ -1617,6 +1632,9 @@ function tidy(raw, lengthKey) {
   // conversational reply. Also collapse excessive repetition loops.
   t = cleanReply(t);
 
+  // If after cleaning there is no content, return empty string (caller will handle).
+  if (!t) return '';
+
   t = t.split('\n').filter(line => {
     const l = line.trim();
     if (!l) return true;
@@ -1685,7 +1703,7 @@ async function compress(conv, settings) {
  *  Send pipeline
  * ------------------------------------------------------------------ */
 
-async function sendMessage(convId, userText, settingsOverride) {
+async function sendMessage(convId, userText, settingsOverride, messageId) {
   // Use conversation lock to prevent race conditions on concurrent requests
   return withConvLock(convId, async () => {
     const settings = { ...await loadSettings(), ...(settingsOverride || {}) };
@@ -1697,6 +1715,17 @@ async function sendMessage(convId, userText, settingsOverride) {
     if (!conv) throw new ApiError(404, 'no_conv', 'Conversation not found.');
     const text = String(userText || '').trim();
     if (!text) throw new ApiError(400, 'empty', 'Nothing to send.');
+
+    // Idempotency check: if messageId is provided, check if it was already processed
+    if (messageId && conv.messages.some(m => m.messageId === messageId)) {
+      console.log('[api] message already processed (idempotency):', messageId);
+      const lastAssistant = [...conv.messages].reverse().find(m => m.role === 'assistant');
+      return {
+        reply: lastAssistant ? lastAssistant.content : '(Message already processed)',
+        meta: { duplicate: true, requestedModel: settings.model }
+      };
+    }
+
     if (/\b(loli|shota|preteen|underage|jrs|hjk)\b/i.test(text)) {
       const refusal = { role: 'assistant', content: 'No. Not that, not in any version of a scene. Pick something else.', at: Date.now() };
       conv.messages.push({ role: 'user', content: text, at: Date.now() }, refusal);
@@ -1719,7 +1748,7 @@ async function sendMessage(convId, userText, settingsOverride) {
       return { reply: '(Waiting for your message...)', meta: { duplicate: true } };
     }
 
-    conv.messages.push({ role: 'user', content: text, at: Date.now() });
+    conv.messages.push({ role: 'user', content: text, at: Date.now(), messageId: messageId || null });
 
     // NEW: Detect who the user is addressing in their message
     // This helps determine which character should respond
@@ -1821,11 +1850,25 @@ async function sendMessage(convId, userText, settingsOverride) {
       console.log('[api] retry succeeded');
     } catch (retryErr) {
       console.error('[api] retry failed:', retryErr.message);
-      reply = '...';
+      reply = '';
     }
   }
 
-  if (!reply) reply = '...';
+  // If after all cleanup and retry we still have no usable reply, do not store
+  // a placeholder - restore conversation state and return a safe fallback.
+  if (!reply || reply === '...') {
+    conv.messages.pop();
+    await saveConv(conv);
+    return {
+      reply: '(The model did not provide a usable response. This sometimes happens with certain models - try a different model or start a fresh scene.)',
+      meta: {
+        requestedModel: settings.model,
+        servedModel: out.served,
+        routing: routingOf(settings.model, out.served),
+        empty: true
+      }
+    };
+  }
 
   conv.messages.push({ role: 'assistant', content: reply, at: Date.now() });
 
@@ -2243,7 +2286,7 @@ const server = http.createServer(async (req, res) => {
 
     if (p === '/api/send' && req.method === 'POST') {
       const body = await readBody(req);
-      const r = await sendMessage(body.convId, body.text, body.config ? { model: body.config.model } : null);
+      const r = await sendMessage(body.convId, body.text, body.config ? { model: body.config.model } : null, body.messageId);
       return send(res, 200, r);
     }
 
