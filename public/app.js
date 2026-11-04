@@ -4,6 +4,9 @@
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+const CONV_ID_KEY = 'companion_active_conv';
+const SCROLL_KEY = 'companion_scroll';
+
 const state = {
   config: null,
   options: null,
@@ -14,6 +17,7 @@ const state = {
   dirtyPersona: false,
   showAll: false,
   lastRouting: null,
+  pendingMessages: [], // Queue for messages awaiting server confirmation
 };
 
 const CONFIG_KEYS = ['baseUrl', 'apiKey', 'model', 'maxInputTokens', 'name'];
@@ -114,6 +118,62 @@ function fitAllSelects() {
 
 /* ---------------- boot ---------------- */
 
+/* Get conversation ID from URL hash, localStorage, or fallback */
+function getActiveConvId() {
+  // Priority 1: URL hash (#convId)
+  const hash = window.location.hash;
+  if (hash && hash.startsWith('#conv=')) {
+    return hash.slice(6);
+  }
+  // Priority 2: localStorage
+  try {
+    const stored = localStorage.getItem(CONV_ID_KEY);
+    if (stored) return stored;
+  } catch (e) { /* localStorage may be disabled */ }
+  // Priority 3: server-suggested (most recent)
+  return null;
+}
+
+/* Set active conversation ID in URL and localStorage */
+function setActiveConvId(id) {
+  if (id) {
+    window.location.hash = 'conv=' + id;
+    try { localStorage.setItem(CONV_ID_KEY, id); } catch (e) {}
+  } else {
+    window.location.hash = '';
+    try { localStorage.removeItem(CONV_ID_KEY); } catch (e) {}
+  }
+}
+
+/* Save scroll position for current conversation */
+function saveScrollPosition() {
+  if (!state.conv) return;
+  const t = $('thread');
+  if (!t) return;
+  try {
+    const data = JSON.stringify({ top: t.scrollTop, height: t.scrollHeight });
+    localStorage.setItem(SCROLL_KEY + '_' + state.conv.id, data);
+  } catch (e) {}
+}
+
+/* Restore scroll position for current conversation */
+function restoreScrollPosition() {
+  if (!state.conv) return;
+  try {
+    const data = localStorage.getItem(SCROLL_KEY + '_' + state.conv.id);
+    if (data) {
+      const { top, height } = JSON.parse(data);
+      const t = $('thread');
+      if (t && Math.abs(t.scrollHeight - height) < 50) {
+        t.scrollTop = top;
+        return;
+      }
+    }
+  } catch (e) {}
+  // Default: scroll to bottom on first load
+  scrollBottom();
+}
+
 async function boot() {
   try {
     const [config, options, models] = await Promise.all([api('/api/config'), api('/api/options'), api('/api/models')]);
@@ -124,7 +184,9 @@ async function boot() {
     fillSettingsForm();
     updateModelBadge();
     await loadHistory();
-    await openConversation(config.autoOpenId || null);
+    // Use URL hash or localStorage to restore the exact conversation
+    const convId = getActiveConvId() || config.autoOpenId;
+    await openConversation(convId);
   } catch (e) {
     showError(e);
   }
@@ -527,6 +589,8 @@ async function newConversation() {
   paintControls();
   updateTopbar();
   await loadHistory();
+  // Set as active conversation
+  setActiveConvId(r.conv.id);
   try {
     await greeting(r.conv.id);
   } catch (e) { showError(e); }
@@ -542,6 +606,10 @@ async function openConversation(id) {
     paintControls();
     updateTopbar();
     renderHistory();
+    // Update URL and localStorage
+    setActiveConvId(id);
+    // Restore scroll position after a short delay to let layout settle
+    setTimeout(restoreScrollPosition, 50);
     return;
   }
   await newConversation();
@@ -552,6 +620,11 @@ async function deleteConversation(id) {
   await api('/api/conversations/' + id, { method: 'DELETE' });
   await loadHistory();
   if (!state.conv) await newConversation();
+  // Clear stored ID if it was the deleted conversation
+  try {
+    const stored = localStorage.getItem(CONV_ID_KEY);
+    if (stored === id) localStorage.removeItem(CONV_ID_KEY);
+  } catch (e) {}
 }
 
 /* ---------------- messages ---------------- */
@@ -594,6 +667,21 @@ function typing(on) {
 
 function scrollBottom() { const t = $('thread'); t.scrollTop = t.scrollHeight; }
 
+/* Save scroll position on scroll (throttled) */
+let scrollTimer = null;
+$('thread')?.addEventListener('scroll', () => {
+  if (scrollTimer) clearTimeout(scrollTimer);
+  scrollTimer = setTimeout(saveScrollPosition, 150);
+});
+
+/* Handle browser back/forward and manual hash changes */
+window.addEventListener('hashchange', async () => {
+  const convId = getActiveConvId();
+  if (convId && state.conv && state.conv.id !== convId) {
+    await openConversation(convId);
+  }
+});
+
 async function greeting(convId) {
   if (state.busy) return;
   state.busy = true;
@@ -617,21 +705,46 @@ async function greeting(convId) {
   }
 }
 
+/* Message ID generator for idempotency */
+let messageIdCounter = 0;
+function generateMessageId() {
+  return 'm_' + Date.now().toString(36) + '_' + (messageIdCounter++);
+}
+
 async function send() {
   const input = $('input');
   const text = input.value.trim();
   if (!text || state.busy || !state.conv) return;
   // Prevent duplicate sends for the same message
   if (state.busy) return;
+
+  // Create a pending message record
+  const msgId = generateMessageId();
+  const pendingMsg = {
+    id: msgId,
+    role: 'user',
+    content: text,
+    at: Date.now(),
+    status: 'pending'
+  };
+
   input.value = '';
   input.style.height = 'auto';
   appendMessage('user', text);
   state.busy = true;
   setComposer(false);
   typing(true);
+
+  // Add to pending queue
+  state.pendingMessages.push(pendingMsg);
+
   try {
-    const r = await api('/api/send', { body: { convId: state.conv.id, text, config: { model: state.config.model } } });
+    const r = await api('/api/send', { body: { convId: state.conv.id, text, config: { model: state.config.model }, messageId: msgId } });
+    // Remove from pending queue on success
+    state.pendingMessages = state.pendingMessages.filter(m => m.id !== msgId);
+
     state.conv.messages = state.conv.messages || [];
+    state.conv.messages.push({ role: 'user', content: text, at: Date.now() });
     state.conv.messages.push({ role: 'assistant', content: r.reply, at: Date.now() });
     $('typing') && $('typing').remove();
     appendMessage('assistant', r.reply);
@@ -644,11 +757,31 @@ async function send() {
     await loadHistory();
   } catch (e) {
     showError(e);
+    // Mark message as failed in pending queue
+    const pending = state.pendingMessages.find(m => m.id === msgId);
+    if (pending) {
+      pending.status = 'failed';
+      toast('Message failed to send. You can retry or refresh.');
+    }
   } finally {
     typing(false);
     state.busy = false;
     setComposer(true);
     input.focus();
+  }
+}
+
+/* Retry failed pending messages */
+async function retryPendingMessages() {
+  const failed = state.pendingMessages.filter(m => m.status === 'failed');
+  if (!failed.length) return;
+
+  toast('Retrying ' + failed.length + ' failed message(s)...');
+  for (const msg of failed) {
+    msg.status = 'retrying';
+    const input = $('input');
+    input.value = msg.content;
+    await send();
   }
 }
 
