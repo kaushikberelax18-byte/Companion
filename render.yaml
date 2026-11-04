@@ -15,3 +15,7 @@ services:
         sync: false
       - key: ANTHROPIC_BASE_URL
         sync: false
+      - key: KV_REST_API_URL
+        sync: false
+      - key: KV_REST_API_TOKEN
+        sync: false
