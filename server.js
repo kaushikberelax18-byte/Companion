@@ -1703,16 +1703,53 @@ async function compress(conv, settings) {
  *  Send pipeline
  * ------------------------------------------------------------------ */
 
+/* Create a brand-new conversation from scratch. Used both by the
+   /api/conversations POST handler and by sendMessage's recovery path
+   when a requested conversation genuinely does not exist. */
+async function createConversation(personaOverride) {
+  const s = await loadSettings();
+  const persona = { ...s.persona, ...(personaOverride || {}) };
+  persona.age = clampAge(persona.age);
+  const initialCharacters = createInitialCharacters(persona);
+  const conv = {
+    id: newId(),
+    title: '',
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    persona,
+    messages: [],
+    memory: '',
+    recent: { openers: [], moves: [], endearments: [] },
+    characters: initialCharacters,
+    scene: characters.createSceneState({
+      participants: Object.keys(initialCharacters)
+    }),
+    continuity: {
+      summary: '',
+      lastUpdatedAt: 0,
+      turnCount: 0
+    }
+  };
+  await saveConv(conv);
+  return conv;
+}
+
 async function sendMessage(convId, userText, settingsOverride, messageId) {
   // Use conversation lock to prevent race conditions on concurrent requests
   return withConvLock(convId, async () => {
     const settings = { ...await loadSettings(), ...(settingsOverride || {}) };
-    const conv = await loadConv(convId);
+    let conv = await loadConv(convId);
     // Use conversation-specific model if set, otherwise fall back to global settings
     if (conv && conv.model && !settingsOverride) {
       settings.model = conv.model;
     }
-    if (!conv) throw new ApiError(404, 'no_conv', 'Conversation not found.');
+    // If the requested conversation genuinely does not exist, recover
+    // safely by creating a new one instead of permanently blocking the
+    // input. Existing conversations are never overwritten or deleted.
+    if (!conv) {
+      console.warn('[api] Conversation not found, creating new one:', convId);
+      conv = await createConversation();
+    }
     const text = String(userText || '').trim();
     if (!text) throw new ApiError(400, 'empty', 'Nothing to send.');
 
@@ -1937,8 +1974,11 @@ async function sendMessage(convId, userText, settingsOverride, messageId) {
 
 async function openingLine(convId) {
   const settings = await loadSettings();
-  const conv = await loadConv(convId);
-  if (!conv) throw new ApiError(404, 'no_conv', 'Conversation not found.');
+  let conv = await loadConv(convId);
+  if (!conv) {
+    console.warn('[api] Conversation not found for opening line, creating new one:', convId);
+    conv = await createConversation();
+  }
   const system = buildSystem(settings, conv, 'open the conversation yourself, the way you actually would, with something specific');
   const out = await apiCall(settings, { model: settings.model, max_tokens: 300, temperature: 1, system, messages: [{ role: 'user', content: '(the conversation just opened)' }] });
   const reply = tidy(out.reply, conv.persona.length) || 'hey. what are you doing right now.';
@@ -2096,30 +2136,7 @@ const server = http.createServer(async (req, res) => {
 
     if (p === '/api/conversations' && req.method === 'POST') {
       const body = await readBody(req);
-      const s = await loadSettings();
-      const persona = { ...s.persona, ...(body.persona || {}) };
-      persona.age = clampAge(persona.age);
-      const initialCharacters = createInitialCharacters(persona);
-      const conv = {
-        id: newId(),
-        title: '',
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-        persona,
-        messages: [],
-        memory: '',
-        recent: { openers: [], moves: [], endearments: [] },
-        characters: initialCharacters,
-        scene: characters.createSceneState({
-          participants: Object.keys(initialCharacters)
-        }),
-        continuity: {
-          summary: '',
-          lastUpdatedAt: 0,
-          turnCount: 0
-        }
-      };
-      await saveConv(conv);
+      const conv = await createConversation(body.persona || {});
       return send(res, 200, { conv });
     }
 
@@ -2366,4 +2383,11 @@ if (require.main === module) {
   startServer();
 }
 
-module.exports = { handler: createHandler(), server };
+module.exports = {
+  handler: createHandler(),
+  server,
+  // Exported for testing
+  createConversation,
+  sendMessage,
+  openingLine
+};
